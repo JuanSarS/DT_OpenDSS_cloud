@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 from pathlib import Path
 
 from altdss import altdss
 
-from app.domain.models import ComplexValue, SolveResponse
+from app.domain.models import ComplexValue, ModelSummary, SolveResponse
+
+
+_ENGINE_LOAD_LOCK = threading.Lock()
 
 
 def _complex_values(raw: list[float] | tuple[float, ...]) -> list[ComplexValue]:
@@ -38,16 +42,15 @@ class OpenDSSContextEngine:
     """
 
     def __init__(self, topology_path: Path, load_multiplier: float = 1.0) -> None:
-        self._ctx = altdss.NewContext()
-        self._topology_path = topology_path.resolve()
-
-        # The IEEE feeder redirects support files using relative paths.
-        self._ctx.Settings.AllowChangeDir = True
-
-        # Full clean load: no electrical state from a previous model is inherited.
-        self._ctx("Clear")
-        self._ctx(f'Redirect "{self._topology_path.as_posix()}"')
-        self._ctx.Solution.LoadMult = load_multiplier
+        # AltDSS changes the process working directory while resolving relative
+        # Redirect statements. Serialize only model loading to avoid races.
+        with _ENGINE_LOAD_LOCK:
+            self._ctx = altdss.NewContext()
+            self._topology_path = topology_path.resolve()
+            self._ctx.Settings.AllowChangeDir = True
+            self._ctx("Clear")
+            self._ctx(f'Redirect "{self._topology_path.as_posix()}"')
+            self._ctx.Solution.LoadMult = load_multiplier
 
     @property
     def identity(self) -> int:
@@ -57,6 +60,22 @@ class OpenDSSContextEngine:
     @property
     def load_multiplier(self) -> float:
         return float(self._ctx.Solution.LoadMult)
+
+    def model_summary(self, topology: str) -> ModelSummary:
+        classic = self._ctx.to_dss_python()
+        circuit = classic.ActiveCircuit
+        node_names = list(circuit.AllNodeNames)
+        return ModelSummary(
+            topology=topology,
+            num_buses=len(list(circuit.AllBusNames)),
+            num_nodes=len(node_names),
+            node_names=node_names,
+        )
+
+    def close(self) -> None:
+        """Release the native circuit before the session is removed."""
+        self._ctx("Clear")
+        self._ctx = None
 
     def solve(self, session_id: str, topology: str) -> SolveResponse:
         start = time.perf_counter()

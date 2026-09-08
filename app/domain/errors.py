@@ -4,3 +4,7 @@ class SimulationNotFoundError(KeyError):
 
 class TopologyNotFoundError(ValueError):
     """Raised when the requested topology is not available."""
+
+
+class SimulationClosedError(RuntimeError):
+    """Raised when an operation targets a closed simulation."""

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>OpenDSS Cloud</title>
+  <style>body{font-family:system-ui;max-width:900px;margin:2rem auto}button{margin:.25rem}pre{background:#f3f3f3;padding:1rem;white-space:pre-wrap}</style>
+</head>
+<body>
+  <h1>Gemelo Digital IEEE13</h1>
+  <button id="create">Crear simulacion</button>
+  <button id="solve" disabled>Resolver</button>
+  <p id="session">Sin simulacion</p>
+  <p id="status">-</p>
+  <pre id="output"></pre>
+  <script>
+    let sessionId = null;
+    let socket = null;
+    const status = document.getElementById("status");
+    const output = document.getElementById("output");
+    document.getElementById("create").onclick = async () => {
+      const response = await fetch("/simulations", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({topology:"ieee13"})});
+      const data = await response.json();
+      sessionId = data.session_id;
+      document.getElementById("session").textContent = sessionId;
+      document.getElementById("solve").disabled = false;
+      socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/simulations/${sessionId}`);
+      socket.onmessage = event => {
+        const message = JSON.parse(event.data);
+        status.textContent = message.type;
+        if (message.last_result || message.result) output.textContent = JSON.stringify(message.last_result || message.result, null, 2);
+      };
+    };
+    document.getElementById("solve").onclick = async () => {
+      await fetch(`/simulations/${sessionId}/solve`, {method:"POST"});
+    };
+  </script>
+</body>
+</html>

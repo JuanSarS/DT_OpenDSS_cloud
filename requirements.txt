@@ -5,3 +5,4 @@ dss-python>=0.15.4,<0.16
 pytest>=8.0,<9.0
 pytest-anyio>=0.0.0
 httpx>=0.27,<1.0
+psutil>=5.9,<7.0

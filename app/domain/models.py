@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from pydantic import BaseModel, Field
 
 
@@ -20,6 +21,36 @@ class CreateSimulationResponse(BaseModel):
     topology: str
     load_multiplier: float
     created_at: datetime
+
+
+class SimulationStatus(str, Enum):
+    CREATED = "CREATED"
+    READY = "READY"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    CLOSED = "CLOSED"
+    ERROR = "ERROR"
+
+
+class ModelSummary(BaseModel):
+    topology: str
+    num_buses: int
+    num_nodes: int
+    node_names: list[str]
+
+
+class SimulationSummary(BaseModel):
+    session_id: str
+    topology: str
+    status: SimulationStatus
+    created_at: datetime
+    task_count: int
+
+
+class SimulationDetail(SimulationSummary):
+    model_summary: ModelSummary
+    last_result: "SolveResponse | None" = None
+    worker_identity: int
 
 
 class ComplexValue(BaseModel):

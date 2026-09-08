@@ -2,20 +2,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from fastapi import WebSocket, WebSocketDisconnect
+
 from app.adapters.opendss.engine import OpenDSSContextEngine
 from app.adapters.opendss.topology_catalog import resolve_topology
-from app.domain.errors import SimulationNotFoundError
+from app.domain.errors import SimulationClosedError, SimulationNotFoundError
 from app.domain.models import (
     CreateSimulationRequest,
     CreateSimulationResponse,
+    ModelSummary,
+    SimulationDetail,
+    SimulationStatus,
+    SimulationSummary,
     SolveResponse,
 )
 
 logger = logging.getLogger(__name__)
+RECYCLE_THRESHOLD = 162
 
 
 @dataclass
@@ -25,6 +32,11 @@ class SimulationSession:
     created_at: datetime
     engine: OpenDSSContextEngine
     lock: asyncio.Lock
+    model_summary: ModelSummary
+    status: SimulationStatus = SimulationStatus.CREATED
+    task_count: int = 0
+    last_result: SolveResponse | None = None
+    subscribers: set[WebSocket] = field(default_factory=set)
 
 
 class SimulationService:
@@ -53,6 +65,8 @@ class SimulationService:
             created_at=created_at,
             engine=engine,
             lock=asyncio.Lock(),
+            status=SimulationStatus.READY,
+            model_summary=engine.model_summary(request.topology.lower()),
         )
 
         async with self._registry_lock:
@@ -83,12 +97,43 @@ class SimulationService:
         # Never execute two solves simultaneously against the same context.
         # Different sessions still run concurrently because each has its own lock
         # and its own AltDSS context.
+        if session.status == SimulationStatus.CLOSED:
+            raise SimulationClosedError(f"La simulación {session_id} está cerrada")
+
         async with session.lock:
-            result = await asyncio.to_thread(
-                session.engine.solve,
-                session.session_id,
-                session.topology,
+            session.status = SimulationStatus.RUNNING
+            await self.broadcast(session, "simulation_started")
+            await self.broadcast(
+                session, "model_loaded", {"model": session.model_summary.model_dump()}
             )
+            await self.broadcast(session, "solving")
+            try:
+                result = await asyncio.to_thread(
+                    session.engine.solve,
+                    session.session_id,
+                    session.topology,
+                )
+            except Exception:
+                session.status = SimulationStatus.ERROR
+                raise
+            session.task_count += 1
+            session.last_result = result
+            await self.broadcast(session, "result", {"result": result.model_dump()})
+            session.status = SimulationStatus.COMPLETED
+            await self.broadcast(session, "completed")
+
+            if session.task_count >= RECYCLE_THRESHOLD:
+                old_engine = session.engine
+                await asyncio.to_thread(old_engine.close)
+                session.engine = await asyncio.to_thread(
+                    OpenDSSContextEngine,
+                    resolve_topology(session.topology),
+                    result.load_multiplier,
+                )
+                session.model_summary = await asyncio.to_thread(
+                    session.engine.model_summary, session.topology
+                )
+                session.task_count = 0
 
         logger.info(
             "simulation_solved session_id=%s topology=%s elapsed_ms=%.3f converged=%s",
@@ -99,15 +144,100 @@ class SimulationService:
         )
         return result
 
-    def get_engine_identity(self, session_id: str) -> int:
-        """Testing hook: proves two sessions do not share one Python context object."""
+    async def list_sessions(self) -> list[SimulationSummary]:
+        return [
+            SimulationSummary(
+                session_id=session.session_id,
+                topology=session.topology,
+                status=session.status,
+                created_at=session.created_at,
+                task_count=session.task_count,
+            )
+            for session in self._sessions.values()
+        ]
+
+    def get_detail(self, session_id: str) -> SimulationDetail:
+        session = self._get_session(session_id)
+        return SimulationDetail(
+            session_id=session.session_id,
+            topology=session.topology,
+            status=session.status,
+            created_at=session.created_at,
+            task_count=session.task_count,
+            model_summary=session.model_summary,
+            last_result=session.last_result,
+            worker_identity=session.engine.identity,
+        )
+
+    async def close(self, session_id: str) -> None:
+        session = self._get_session(session_id)
+        async with session.lock:
+            session.status = SimulationStatus.CLOSED
+            await asyncio.to_thread(session.engine.close)
+            await self.broadcast(
+                session, "completed", {"status": SimulationStatus.CLOSED.value}
+            )
+            async with self._registry_lock:
+                self._sessions.pop(session_id, None)
+        session.subscribers.clear()
+
+    async def subscribe(self, session_id: str, websocket: WebSocket) -> None:
+        session = self._get_session(session_id)
+        await websocket.accept()
+        session.subscribers.add(websocket)
+        await websocket.send_json(
+            {
+                "type": "snapshot",
+                "session_id": session_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "simulation": SimulationSummary(
+                    session_id=session.session_id,
+                    topology=session.topology,
+                    status=session.status,
+                    created_at=session.created_at,
+                    task_count=session.task_count,
+                ).model_dump(mode="json"),
+                "model": session.model_summary.model_dump(),
+                "last_result": session.last_result.model_dump() if session.last_result else None,
+            }
+        )
+
+    def unsubscribe(self, session_id: str, websocket: WebSocket) -> None:
+        session = self._sessions.get(session_id)
+        if session:
+            session.subscribers.discard(websocket)
+
+    async def broadcast(
+        self, session: SimulationSession, event_type: str, payload: dict | None = None
+    ) -> None:
+        message = {
+            "type": event_type,
+            "session_id": session.session_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **(payload or {}),
+        }
+        disconnected: list[WebSocket] = []
+        for websocket in tuple(session.subscribers):
+            try:
+                await websocket.send_json(message)
+            except (RuntimeError, WebSocketDisconnect):
+                disconnected.append(websocket)
+        for websocket in disconnected:
+            session.subscribers.discard(websocket)
+
+    def _get_session(self, session_id: str) -> SimulationSession:
         session = self._sessions.get(session_id)
         if session is None:
-            raise SimulationNotFoundError(session_id)
+            raise SimulationNotFoundError(
+                f"No existe una simulación con session_id={session_id}"
+            )
+        return session
+
+    def get_engine_identity(self, session_id: str) -> int:
+        """Testing hook: proves two sessions do not share one Python context object."""
+        session = self._get_session(session_id)
         return session.engine.identity
 
     def get_load_multiplier(self, session_id: str) -> float:
-        session = self._sessions.get(session_id)
-        if session is None:
-            raise SimulationNotFoundError(session_id)
+        session = self._get_session(session_id)
         return session.engine.load_multiplier
