@@ -1,6 +1,7 @@
 services:
   opendss-cloud:
     build: .
+    restart: unless-stopped10
     ports:
       - "${APP_PORT:-8000}:8000"
     env_file:
