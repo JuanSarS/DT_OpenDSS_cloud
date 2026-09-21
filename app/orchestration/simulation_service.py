@@ -20,9 +20,10 @@ from app.domain.models import (
     SimulationSummary,
     SolveResponse,
 )
+from app.platform.settings import get_settings
 
 logger = logging.getLogger(__name__)
-RECYCLE_THRESHOLD = 162
+RECYCLE_THRESHOLD = get_settings().recycle_threshold
 
 
 @dataclass
@@ -48,6 +49,9 @@ class SimulationService:
         self, request: CreateSimulationRequest
     ) -> CreateSimulationResponse:
         topology_path = resolve_topology(request.topology)
+        async with self._registry_lock:
+            if len(self._sessions) >= get_settings().max_active_simulations:
+                raise RuntimeError("Se alcanzó MAX_ACTIVE_SIMULATIONS")
 
         # Engine construction is synchronous/native. Keep it out of the event
         # loop because future networks can be much heavier than IEEE13.
@@ -61,7 +65,7 @@ class SimulationService:
         created_at = datetime.now(timezone.utc)
         session = SimulationSession(
             session_id=session_id,
-            topology=request.topology.lower(),
+            topology=request.topology,
             created_at=created_at,
             engine=engine,
             lock=asyncio.Lock(),
@@ -122,7 +126,7 @@ class SimulationService:
             session.status = SimulationStatus.COMPLETED
             await self.broadcast(session, "completed")
 
-            if session.task_count >= RECYCLE_THRESHOLD:
+            if                         session.task_count >= RECYCLE_THRESHOLD:
                 old_engine = session.engine
                 await asyncio.to_thread(old_engine.close)
                 session.engine = await asyncio.to_thread(

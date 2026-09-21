@@ -11,6 +11,7 @@ from app.orchestration.container import simulation_service
 
 
 def test_registry_openapi_last_result_and_close() -> None:
+   
     with TestClient(app) as client:
         created = [
             client.post("/simulations", json={"topology": "ieee13"}).json()
@@ -38,6 +39,7 @@ def test_registry_openapi_last_result_and_close() -> None:
 
 
 def test_docs_and_invalid_topology() -> None:
+    
     with TestClient(app) as client:
         assert client.get("/docs").status_code == 200
         openapi = client.get("/openapi.json")
@@ -48,6 +50,7 @@ def test_docs_and_invalid_topology() -> None:
 
 
 def test_websocket_snapshot_and_broadcast() -> None:
+    
     with TestClient(app) as client:
         session_id = client.post(
             "/simulations", json={"topology": "ieee13"}

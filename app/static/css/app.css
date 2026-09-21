@@ -1,0 +1,6 @@
+body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; color: #1f2937; }
+button, input, select { margin: .25rem; padding: .45rem .6rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+article, section { border: 1px solid #d1d5db; border-radius: .4rem; padding: 1rem; margin: 1rem 0; }
+pre { background: #f3f4f6; padding: 1rem; white-space: pre-wrap; max-height: 28rem; overflow: auto; }
+li { margin: .4rem 0; }

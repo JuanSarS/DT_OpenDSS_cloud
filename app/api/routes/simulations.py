@@ -26,7 +26,7 @@ async def create_simulation(
 ) -> CreateSimulationResponse:
     try:
         return await simulation_service.create(request)
-    except TopologyNotFoundError as exc:
+    except (TopologyNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
