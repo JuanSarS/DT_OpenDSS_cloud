@@ -24,7 +24,7 @@ def main() -> None:
     cases = base / "Version8" / "Distrib" / "IEEETestCases"
     mappings = {
         "ieee13": ("13Bus", "IEEE13Nodeckt.dss"),
-        "ieee34": ("34Bus", "Run_IEEE34Mod1.dss"),
+        "ieee34": ("34Bus", "ieee34Mod1.dss"),
         "ieee123": ("123Bus", "IEEE123Master.dss"),
     }
     NETWORKS.mkdir(parents=True, exist_ok=True)

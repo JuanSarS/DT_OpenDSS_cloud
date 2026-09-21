@@ -76,7 +76,7 @@ estado sea memoria.
 
 ## 6. Modelos y flujo custom
 
-IEEE13 usa `IEEE13Nodeckt.dss`, IEEE34 `Run_IEEE34Mod1.dss` e IEEE123
+IEEE13 usa `IEEE13Nodeckt.dss`, IEEE34 `Run_IEEE34Mod1.dss` -> corregido a `ieee34Mod1.dss` e IEEE123
 `IEEE123Master.dss`, copiados con sus auxiliares y redirects. Flujo custom:
 `upload -> extract -> select master -> validate -> error -> edit -> save ->
 validate -> simulation`. No se registra una `SimulationSession` durante upload
