@@ -47,6 +47,58 @@ $env:BASE_URL="http://IP_DEL_HOST:8000"; $env:WS_BASE_URL="ws://IP_DEL_HOST:8000
 python scripts/smoke_test.py
 ```
 
+## Métricas y rendimiento
+
+`GET /metrics` expone métricas acumuladas en memoria del proceso: RSS, CPU,
+hilos, sesiones activas/en ejecución, latencias REST, solves Snapshot y pasos
+QSTS. El RSS corresponde al proceso completo del servidor, no a un contexto
+OpenDSS individual.
+
+Las campañas REST/WebSocket usan los mismos comandos para local y cloud y
+guardan evidencia en `docs/evidence/performance/<run_id>/`:
+
+```powershell
+python scripts/performance_campaign.py `
+  --base-url http://127.0.0.1:8000 `
+  --environment local `
+  --model ieee123 `
+  --simulation snapshot `
+  --iterations 30
+
+python scripts/performance_campaign.py `
+  --base-url http://127.0.0.1:8000 `
+  --environment local `
+  --model ieee123 `
+  --simulation qsts `
+  --iterations 30 `
+  --duration-hours 24 `
+  --step-minutes 5 `
+  --profile synthetic_daily
+```
+
+Para un entorno cloud, sustituye únicamente `--base-url` y
+`--environment`, por ejemplo `https://host-publico.example`. La campaña
+deriva automáticamente `ws://` o `wss://` para WebSocket.
+
+Locust se mantiene como dependencia de desarrollo/carga en
+`requirements-dev.txt`. El host siempre se proporciona por CLI:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m locust -f load/locustfile.py --headless -u 5 -r 1 -t 60s `
+  --host http://127.0.0.1:8000 `
+  --csv docs/evidence/performance/locust_local_5users
+
+python -m locust -f load/locustfile.py --headless -u 10 -r 1 -t 60s `
+  --host http://127.0.0.1:8000 `
+  --csv docs/evidence/performance/locust_local_10users
+```
+
+`load/locustfile.py` distribuye los usuarios entre Snapshot y QSTS y marca
+como fallidas las respuestas HTTP inválidas o los solves no convergentes.
+Para comparar campañas, conserva `config.json`, `summary.json`,
+`raw_results.csv`, `metrics_before.json` y `metrics_after.json`.
+
 ## Modelos
 
 `GET /models` obtiene dinámicamente IEEE13, IEEE34 e IEEE123. El selector de

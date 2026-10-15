@@ -1,0 +1,12 @@
+{
+  "timestamp": "20261014T230642Z",
+  "run_id": "20261014T230642Z_local_ieee123_qsts",
+  "environment": "local",
+  "base_url": "http://127.0.0.1:8000",
+  "model": "ieee123",
+  "simulation": "qsts",
+  "iterations": 30,
+  "duration_hours": 24.0,
+  "step_minutes": 5.0,
+  "profile": "synthetic_daily"
+}

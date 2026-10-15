@@ -1,0 +1,53 @@
+{
+  "timestamp": 1792019191.522113,
+  "started_at": 1792019183.6436238,
+  "process": {
+    "pid": 9516,
+    "rss_mb": 117.633,
+    "cpu_percent": 0.5,
+    "threads": 11
+  },
+  "sessions": {
+    "active": 0,
+    "running": 0,
+    "completed": 0,
+    "error": 0
+  },
+  "rest": {},
+  "snapshot": {
+    "solve_count": 0,
+    "solve": {
+      "count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    }
+  },
+  "qsts": {
+    "runs": 0,
+    "total_steps": 0,
+    "elapsed": {
+      "count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "step": {
+      "count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    }
+  },
+  "counters": {},
+  "sample_count": {}
+}

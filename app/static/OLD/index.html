@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenDSS Cloud | Gemelo digital</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+  <main>
+    <h1>Gemelo digital OpenDSS</h1>
+    <section class="grid">
+      <article><h2>Crear</h2><select id="model"></select><button id="create">Crear simulación</button></article>
+      <article><h2>Unirse</h2><input id="join-id" placeholder="session_id"><button id="join">Unirse</button></article>
+    </section>
+    <section><h2>Simulaciones activas</h2><button id="refresh">Actualizar</button><ul id="sessions"></ul></section>
+    <section id="current" hidden>
+      <h2 id="session-title"></h2>
+      <p>WS: <strong id="connection">desconectado</strong> · Estado: <strong id="simulation-status">-</strong></p>
+      <p>Modelo: <span id="model-name"></span> · Buses: <span id="buses"></span> · Nodos: <span id="nodes"></span></p>
+      <button id="solve">Solve</button><button id="close">Cerrar</button>
+      <pre id="result">Sin resultado</pre>
+      <h3>Eventos WebSocket</h3><pre id="events"></pre>
+    </section>
+    <section><h2>Modelo personalizado</h2><input type="file" id="upload" accept=".dss,.zip"><button id="upload-btn">Cargar</button><pre id="custom-status"></pre></section>
+  </main>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

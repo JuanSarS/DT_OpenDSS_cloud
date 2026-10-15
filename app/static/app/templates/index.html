@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenDSS Cloud · Gemelo Digital Híbrido</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="stylesheet" href="/static/css/sessions.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">⌁</div>
+      <div>
+        <h1>OpenDSS Cloud</h1>
+        <p>Gemelo Digital Híbrido</p>
+      </div>
+    </div>
+    <div class="connection-status">
+      <div class="status-item"><span>API</span><span id="apiDot" class="status-dot status-waiting"></span></div>
+      <div class="status-item"><span>WS</span><span id="wsDot" class="status-dot status-offline"></span></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="intro">
+      <div>
+        <h2>Consola de simulación</h2>
+        <p>Seleccione un modelo, revise su DSS, configure la simulación y consulte los resultados en un único espacio de trabajo.</p>
+      </div>
+      <span id="globalState" class="quiet-state">Listo</span>
+    </section>
+
+    <nav class="workflow" aria-label="Flujo de trabajo">
+      <span data-step="1" class="workflow-step is-active">1 Modelo</span><span class="workflow-arrow">›</span>
+      <span data-step="2" class="workflow-step">2 Configuración</span><span class="workflow-arrow">›</span>
+      <span data-step="3" class="workflow-step">3 Ejecución</span><span class="workflow-arrow">›</span>
+      <span data-step="4" class="workflow-step">4 Resultados</span>
+    </nav>
+
+    <section class="section session-browser" aria-labelledby="sessions-title">
+      <div class="section-heading simple">
+        <div><span class="section-kicker">00</span><h3 id="sessions-title">Simulaciones disponibles</h3></div>
+        <button id="refreshSessionsBtn" class="button button-secondary" type="button">Actualizar lista</button>
+      </div>
+      <div class="session-browser-controls">
+        <input id="sessionIdInput" class="input" type="text" placeholder="Pegue aquí un session_id para unirse" aria-label="Identificador de sesión">
+        <button id="joinSessionBtn" class="button button-secondary" type="button">Unirse por ID</button>
+      </div>
+      <p id="sessionsMessage" class="empty-state">Cargando simulaciones...</p>
+      <div id="sessionsList" class="sessions-list" aria-live="polite"></div>
+    </section>
+
+    <section class="section" id="modelSection">
+      <div class="section-heading">
+        <div><span class="section-kicker">01</span><h3>Modelo eléctrico</h3></div>
+        <div class="heading-actions">
+          <label for="modelSelect" class="field-label inline-label">Modelo</label>
+          <select id="modelSelect" class="select select-model"><option value="">Cargando modelos…</option></select>
+          <input id="fileInput" type="file" accept=".dss,.zip" hidden />
+          <button id="uploadBtn" class="button button-secondary" type="button">Cargar DSS / ZIP</button>
+        </div>
+      </div>
+
+      <div class="model-meta">
+        <div><strong id="modelName">Sin modelo seleccionado</strong><span id="modelSource">Seleccione un modelo disponible.</span></div>
+        <div class="model-meta-actions">
+          <button id="restoreBtn" class="link-button" type="button" disabled>Restaurar original</button>
+          <button id="validateBtn" class="button button-secondary" type="button" disabled>Validar modelo</button>
+        </div>
+      </div>
+
+      <div class="editor-wrap">
+        <div id="lineNumbers" class="line-numbers">1</div>
+        <textarea id="dssEditor" class="dss-editor" spellcheck="false" aria-label="Editor DSS" placeholder="El contenido del modelo DSS aparecerá aquí..."></textarea>
+      </div>
+      <div class="editor-footer">
+        <div id="validationMessage" class="validation-message neutral">El modelo todavía no ha sido validado.</div>
+        <div class="editor-position"><span id="lineCount">1 línea</span></div>
+      </div>
+    </section>
+
+    <section class="section section-two-columns">
+      <div class="column">
+        <div class="section-heading simple"><div><span class="section-kicker">02</span><h3>Configuración</h3></div></div>
+        <div class="config-grid">
+          <div class="field">
+            <label for="simulationType">Tipo de simulación</label>
+            <select id="simulationType" class="select">
+              <option value="snapshot">Snapshot</option>
+              <option value="qsts">QSTS</option>
+              <option value="daily" disabled>Daily · Próximamente</option>
+              <option value="yearly" disabled>Yearly · Próximamente</option>
+            </select>
+          </div>
+          <div class="field" id="snapshotOptions">
+            <label for="loadMultiplier">Load multiplier</label>
+            <input id="loadMultiplier" class="input" type="number" value="1.00" min="0" step="0.01" />
+          </div>
+          <div class="field qsts-option" hidden>
+            <label for="durationHours">Duración (horas)</label>
+            <input id="durationHours" class="input" type="number" value="24" min="0.01" step="0.25" />
+          </div>
+          <div class="field qsts-option" hidden>
+            <label for="stepMinutes">Paso (minutos)</label>
+            <input id="stepMinutes" class="input" type="number" value="5" min="0.01" step="5" />
+          </div>
+          <div class="field qsts-option" hidden>
+            <label for="profileSource">Perfil temporal</label>
+            <select id="profileSource" class="select">
+              <option value="constant">constant</option>
+              <option value="synthetic_daily">synthetic_daily</option>
+              <option value="model">model</option>
+              <option value="values">values</option>
+            </select>
+          </div>
+          <div class="field qsts-option profile-option" data-profile="constant" hidden>
+            <label for="qstsLoadMultiplier">Load multiplier</label>
+            <input id="qstsLoadMultiplier" class="input" type="number" value="1.00" min="0" step="0.01" />
+          </div>
+          <div class="field profile-option" data-profile="synthetic_daily" hidden>
+            <span class="field-label">Perfil sintético</span>
+            <p class="microcopy">synthetic_mixed_daily_v1</p>
+          </div>
+          <div class="field profile-option" data-profile="model" hidden>
+            <span class="field-label">Perfil del modelo</span>
+            <p class="microcopy">El perfil temporal será controlado por los LoadShape definidos en el DSS.</p>
+          </div>
+          <div class="field profile-option values-option" data-profile="values" hidden>
+            <label for="valuesInput">Multiplicadores</label>
+            <textarea id="valuesInput" class="input values-input" rows="3" placeholder="0.8, 1.0, 1.2"></textarea>
+            <small id="valuesCount" class="field-hint">Valores esperados: — · Valores ingresados: 0</small>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="createBtn" class="button button-secondary" type="button">Crear simulación</button>
+          <button id="solveBtn" class="button button-primary" type="button" disabled>Ejecutar simulación</button>
+        </div>
+        <p class="microcopy">Los modelos estándar se editan como copia de trabajo. El archivo original no se sobrescribe.</p>
+      </div>
+
+      <div class="column column-status">
+        <div class="section-heading simple">
+          <div><span class="section-kicker">03</span><h3>Estado y progreso</h3></div>
+          <span id="sessionStateBadge" class="state-text">Sin sesión</span>
+        </div>
+        <div class="session-row">
+          <span class="muted">session_id</span><code id="sessionId">—</code>
+          <button id="copySessionBtn" class="link-button" type="button" disabled>Copiar</button>
+        </div>
+        <div class="status-list" id="statusList">
+          <div class="status-line" data-state="session"><span class="state-icon"></span><span>Sesión creada</span><small id="timeSession">—</small></div>
+          <div class="status-line" data-state="ws"><span class="state-icon"></span><span>WebSocket conectado</span><small id="timeWs">—</small></div>
+          <div class="status-line" data-state="model"><span class="state-icon"></span><span>Modelo cargado</span><small id="timeModel">—</small></div>
+          <div class="status-line" data-state="solve"><span class="state-icon"></span><span>Resolución</span><small id="timeSolve">—</small></div>
+          <div class="status-line" data-state="result"><span class="state-icon"></span><span>Resultado recibido</span><small id="timeResult">—</small></div>
+        </div>
+        <div class="progress-block">
+          <div class="progress-labels"><span id="progressLabel">Esperando simulación</span><span id="progressPercent">0 %</span></div>
+          <div class="progress-track"><div id="progressBar" class="progress-bar" style="width: 0%"></div></div>
+        </div>
+        <div class="future-progress"><span id="progressStep">Paso — / —</span><span id="progressHour">Hora simulada —</span><span id="progressLoad">LoadMult —</span></div>
+        <div id="progressDetails" class="progress-details">Potencia — · Vmin — · Vmax — · solve —</div>
+      </div>
+    </section>
+
+    <section class="section" id="resultsSection">
+      <div class="section-heading simple">
+        <div><span class="section-kicker">04</span><h3>Resultados</h3></div>
+        <span id="resultState" class="state-text">Sin resultados</span>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi"><span>Convergencia</span><strong id="kpiConverged">—</strong></div>
+        <div class="kpi"><span>Buses</span><strong id="kpiBuses">—</strong></div>
+        <div class="kpi"><span>Nodos</span><strong id="kpiNodes">—</strong></div>
+        <div class="kpi"><span>Tiempo OpenDSS</span><strong id="kpiEngine">—</strong></div>
+        <div class="kpi"><span>Tiempo total</span><strong id="kpiTotal">—</strong></div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab is-active" data-tab="voltages" type="button">Voltajes</button>
+        <button class="tab" data-tab="powers" type="button">Potencias</button>
+        <button class="tab" data-tab="qsts" type="button">QSTS</button>
+        <button class="tab" data-tab="metrics" type="button">Métricas</button>
+        <button class="tab" data-tab="events" type="button">Eventos</button>
+        <button class="tab" data-tab="diagram" type="button">Diagrama <span class="coming-soon">Próximamente</span></button>
+        <button class="tab" data-tab="summary" type="button">Resumen</button>
+      </div>
+
+      <div class="tab-panel is-visible" data-panel="voltages">
+        <div class="table-toolbar">
+          <input id="voltageSearch" class="input table-search" type="search" placeholder="Buscar nodo o bus…" />
+          <button id="exportBtn" class="button button-secondary" type="button" disabled>Exportar CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table id="voltageTable">
+            <thead><tr><th data-sort="node">Nodo</th><th data-sort="bus">Bus</th><th data-sort="phase">Fase</th><th data-sort="voltage">Voltaje</th><th data-sort="pu">p.u.</th><th data-sort="angle">Ángulo</th></tr></thead>
+            <tbody id="voltageTableBody"><tr><td colspan="6" class="table-empty">Sin resultados.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="powers">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Concepto</th><th>Valor</th></tr></thead>
+            <tbody id="powersTableBody"><tr><td colspan="2" class="table-empty">Ejecute una simulación.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="qsts">
+        <div class="table-toolbar">
+          <input id="qstsSearch" class="input table-search" type="search" placeholder="Buscar step, hora o LoadMult…" />
+        </div>
+        <div class="table-wrap">
+          <table id="qstsTable">
+            <thead><tr><th data-qsts-sort="simulated_hour">Hora</th><th data-qsts-sort="step">Step</th><th data-qsts-sort="load_multiplier">LoadMult</th><th data-qsts-sort="total_kw">kW</th><th data-qsts-sort="total_kvar">kvar</th><th data-qsts-sort="min_voltage_pu">Vmin</th><th data-qsts-sort="max_voltage_pu">Vmax</th><th data-qsts-sort="solve_ms">solve_ms</th><th data-qsts-sort="converged">converged</th></tr></thead>
+            <tbody id="qstsTableBody"><tr><td colspan="9" class="table-empty">Ejecute un QSTS.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="metrics">
+        <div class="table-toolbar"><span class="muted">Métricas del proceso servidor</span><button id="refreshMetricsBtn" class="button button-secondary" type="button">Actualizar métricas</button></div>
+        <div id="metricsContent" class="metrics-grid"><p class="empty-state">Pulse “Actualizar métricas”.</p></div>
+      </div>
+      <div class="tab-panel" data-panel="events"><ol id="eventLog" class="event-log"><li>Interfaz inicializada.</li></ol></div>
+
+      <div class="tab-panel" data-panel="diagram">
+        <div class="diagram-placeholder">
+          <div class="diagram-copy">
+            <strong>Visualización automática del circuito a partir del modelo DSS</strong>
+            <p>Esta pestaña queda reservada para una futura representación de buses, líneas, transformadores y cargas. Será de solo lectura.</p>
+          </div>
+          <svg viewBox="0 0 720 220" role="img" aria-label="Vista conceptual futura del circuito">
+            <line x1="70" y1="110" x2="210" y2="110"/><line x1="210" y1="110" x2="350" y2="110"/>
+            <line x1="350" y1="110" x2="500" y2="60"/><line x1="350" y1="110" x2="500" y2="165"/>
+            <line x1="500" y1="60" x2="640" y2="60"/><line x1="500" y1="165" x2="640" y2="165"/>
+            <circle cx="70" cy="110" r="7"/><circle cx="210" cy="110" r="7"/><circle cx="350" cy="110" r="7"/>
+            <circle cx="500" cy="60" r="7"/><circle cx="500" cy="165" r="7"/><circle cx="640" cy="60" r="7"/><circle cx="640" cy="165" r="7"/>
+            <text x="42" y="92">Source</text><text x="188" y="92">Bus 1</text><text x="325" y="92">Bus 2</text><text x="477" y="42">Bus 3</text><text x="477" y="195">Bus 4</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="summary">
+        <div id="summaryEmpty" class="empty-state">Ejecute una simulación para ver el resumen de resultados.</div>
+        <pre id="summaryJson" class="summary-json" hidden></pre>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

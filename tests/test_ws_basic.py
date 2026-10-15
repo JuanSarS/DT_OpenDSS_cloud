@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.adapters.opendss.engine import OpenDSSContextEngine
+from app.domain.models import QSTSResult
 from app.orchestration import simulation_service as service_module
 from app.orchestration.container import simulation_service
 
@@ -170,6 +171,175 @@ def test_health_is_available_during_solve(monkeypatch) -> None:
             session_id = created.json()["session_id"]
             solve_task = asyncio.create_task(
                 client.post(f"/simulations/{session_id}/solve")
+            )
+            assert await asyncio.to_thread(started.wait, 2)
+            health = await client.get("/health")
+            assert health.status_code == 200
+            release.set()
+            solved = await solve_task
+            assert solved.status_code == 200
+            assert (await client.delete(f"/simulations/{session_id}")).status_code == 204
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        release.set()
+
+
+def _qsts_request() -> dict:
+    return {
+        "simulation_type": "qsts",
+        "qsts": {
+            "duration_hours": 0.25,
+            "step_minutes": 5,
+            "profile_source": "values",
+            "load_multipliers": [0.8, 1.0, 1.2],
+        },
+    }
+
+
+def test_websocket_qsts_progress_and_summary() -> None:
+    with TestClient(app) as client:
+        session_id = client.post(
+            "/simulations", json={"topology": "ieee123"}
+        ).json()["session_id"]
+        try:
+            with client.websocket_connect(
+                f"/ws/simulations/{session_id}"
+            ) as websocket:
+                assert websocket.receive_json()["type"] == "snapshot"
+                solve = client.post(
+                    f"/simulations/{session_id}/solve",
+                    json=_qsts_request(),
+                )
+                assert solve.status_code == 200
+                events = []
+                while True:
+                    events.append(websocket.receive_json())
+                    if events[-1]["type"] == "completed":
+                        break
+
+                assert [event["type"] for event in events[:3]] == [
+                    "simulation_started",
+                    "model_loaded",
+                    "solving",
+                ]
+                progress = [
+                    event for event in events if event["type"] == "qsts_progress"
+                ]
+                assert [event["step"] for event in progress] == [1, 2, 3]
+                assert [event["load_multiplier"] for event in progress] == [
+                    0.8,
+                    1.0,
+                    1.2,
+                ]
+                assert [event["total_steps"] for event in progress] == [3, 3, 3]
+                assert [event["progress_pct"] for event in progress] == [
+                    33.333,
+                    66.667,
+                    100.0,
+                ]
+                assert all(event["converged"] for event in progress)
+                assert events[-2]["type"] == "result"
+                assert events[-2]["simulation_type"] == "qsts"
+                assert "steps" not in events[-2]["summary"]
+                assert events[-1]["type"] == "completed"
+
+            results = client.get(f"/simulations/{session_id}/results")
+            assert len(results.json()["steps"]) == 3
+        finally:
+            client.delete(f"/simulations/{session_id}")
+
+
+def test_qsts_progress_reaches_all_observers_without_cross_session_events() -> None:
+    with TestClient(app) as client:
+        session_a = client.post(
+            "/simulations", json={"topology": "ieee123"}
+        ).json()["session_id"]
+        session_b = client.post(
+            "/simulations", json={"topology": "ieee123"}
+        ).json()["session_id"]
+        try:
+            with (
+                client.websocket_connect(f"/ws/simulations/{session_a}") as a1,
+                client.websocket_connect(f"/ws/simulations/{session_a}") as a2,
+                client.websocket_connect(f"/ws/simulations/{session_b}") as b1,
+            ):
+                a1.receive_json()
+                a2.receive_json()
+                b1.receive_json()
+                assert client.post(
+                    f"/simulations/{session_a}/solve", json=_qsts_request()
+                ).status_code == 200
+                a1_events = [a1.receive_json() for _ in range(8)]
+                a2_events = [a2.receive_json() for _ in range(8)]
+                assert [
+                    event["step"]
+                    for event in a1_events
+                    if event["type"] == "qsts_progress"
+                ] == [1, 2, 3]
+                assert [
+                    event["step"]
+                    for event in a2_events
+                    if event["type"] == "qsts_progress"
+                ] == [1, 2, 3]
+                assert client.post(
+                    f"/simulations/{session_b}/solve", json=_qsts_request()
+                ).status_code == 200
+                b_events = [b1.receive_json() for _ in range(8)]
+                assert all(event["session_id"] == session_b for event in b_events)
+        finally:
+            client.delete(f"/simulations/{session_a}")
+            client.delete(f"/simulations/{session_b}")
+
+
+def test_late_qsts_viewer_receives_current_progress_snapshot() -> None:
+    with TestClient(app) as client:
+        session_id = client.post(
+            "/simulations", json={"topology": "ieee123"}
+        ).json()["session_id"]
+        try:
+            solved = client.post(
+                f"/simulations/{session_id}/solve",
+                json=_qsts_request(),
+            )
+            assert solved.status_code == 200
+            with client.websocket_connect(
+                f"/ws/simulations/{session_id}"
+            ) as websocket:
+                snapshot = websocket.receive_json()
+                assert snapshot["simulation_type"] == "qsts"
+                assert snapshot["current_step"] == 3
+                assert snapshot["total_steps"] == 3
+                assert snapshot["progress_pct"] == 100.0
+                assert snapshot["last_qsts_step"]["step"] == 3
+        finally:
+            client.delete(f"/simulations/{session_id}")
+
+
+def test_health_is_available_during_qsts(monkeypatch) -> None:
+    started = threading.Event()
+    release = threading.Event()
+    original_solve_qsts = OpenDSSContextEngine.solve_qsts
+
+    def controlled_solve_qsts(self, config, progress_callback=None) -> QSTSResult:
+        started.set()
+        if not release.wait(timeout=2):
+            raise TimeoutError("controlled QSTS was not released")
+        return original_solve_qsts(self, config, progress_callback)
+
+    monkeypatch.setattr(OpenDSSContextEngine, "solve_qsts", controlled_solve_qsts)
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post("/simulations", json={"topology": "ieee123"})
+            session_id = created.json()["session_id"]
+            solve_task = asyncio.create_task(
+                client.post(
+                    f"/simulations/{session_id}/solve",
+                    json=_qsts_request(),
+                )
             )
             assert await asyncio.to_thread(started.wait, 2)
             health = await client.get("/health")

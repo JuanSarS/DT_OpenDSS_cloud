@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.health import router as health_router
+from app.api.routes.metrics import router as metrics_router
 from app.api.routes.models import router as models_router
 from app.api.routes.simulations import router as simulations_router
 from app.api.routes.simulations import websocket_router
@@ -29,12 +30,19 @@ if get_settings().cors_origin_list:
     )
 
 app.include_router(health_router)
+app.include_router(metrics_router)
 app.include_router(models_router)
 app.include_router(simulations_router)
 app.include_router(websocket_router)
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+app.mount(
+    "/static",
+    StaticFiles(directory=Path(__file__).parent / "static" / "app" / "static"),
+    name="static",
+)
 
 
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+    return FileResponse(
+        Path(__file__).parent / "static" / "app" / "templates" / "index.html"
+    )

@@ -1,0 +1,96 @@
+{
+  "timestamp": "20261015T002712Z",
+  "run_id": "20261015T002712Z_local_ieee8500_snapshot",
+  "environment": "local",
+  "base_url": "http://127.0.0.1:8000",
+  "model": "ieee8500",
+  "simulation": "snapshot",
+  "iterations": 10,
+  "duration_hours": 24.0,
+  "step_minutes": 5.0,
+  "profile": "synthetic_daily",
+  "errors": 10,
+  "operations": {
+    "health_ms": {
+      "count": 10,
+      "mean": 6.725,
+      "min": 5.571,
+      "p50": 6.59,
+      "p95": 8.188,
+      "p99": 8.623,
+      "max": 8.731
+    },
+    "create_ms": {
+      "count": 10,
+      "mean": 257.605,
+      "min": 229.671,
+      "p50": 248.726,
+      "p95": 298.737,
+      "p99": 307.035,
+      "max": 309.109
+    },
+    "ws_connect_ms": {
+      "count": 10,
+      "mean": 19.694,
+      "min": 14.415,
+      "p50": 15.947,
+      "p95": 38.537,
+      "p99": 52.714,
+      "max": 56.258
+    },
+    "solve_http_ms": {
+      "count": 0,
+      "mean": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "ws_first_progress_ms": {
+      "count": 0,
+      "mean": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "ws_result_ms": {
+      "count": 0,
+      "mean": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "ws_completed_ms": {
+      "count": 0,
+      "mean": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "get_results_ms": {
+      "count": 0,
+      "mean": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "delete_ms": {
+      "count": 10,
+      "mean": 51.002,
+      "min": 45.845,
+      "p50": 50.785,
+      "p95": 57.192,
+      "p99": 57.618,
+      "max": 57.725
+    }
+  }
+}
