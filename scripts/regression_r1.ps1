@@ -109,6 +109,12 @@ if ($Full) {
     if ($LASTEXITCODE -ne 0) {
         throw "IEEE8500 API smoke failed"
     }
+
+    Write-Host "[14] Contract Jobs Smoke"
+    python .\scripts\contracts_smoke.py
+        if ($LASTEXITCODE -ne 0) {
+        throw "Contract Jobs smoke failed"
+    }
 }
 
 Write-Host ""
