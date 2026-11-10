@@ -1,5 +1,9 @@
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_ROOT = PROJECT_ROOT / "services" / "frontend"
+
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,13 +40,10 @@ app.include_router(simulations_router)
 app.include_router(websocket_router)
 app.mount(
     "/static",
-    StaticFiles(directory=Path(__file__).parent / "static" / "app" / "static"),
+    StaticFiles(directory=FRONTEND_ROOT / "static"),
     name="static",
 )
 
-
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
-    return FileResponse(
-        Path(__file__).parent / "static" / "app" / "templates" / "index.html"
-    )
+    return FileResponse(FRONTEND_ROOT / "templates" / "index.html")
