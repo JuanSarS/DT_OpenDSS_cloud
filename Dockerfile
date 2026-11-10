@@ -6,6 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY services ./services
+COPY packages ./packages
 COPY scripts ./scripts
 COPY data ./data
 RUN python scripts/bootstrap_ieee_models.py && mkdir -p data/runtime/custom_models \

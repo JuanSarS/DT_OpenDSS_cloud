@@ -1,10 +1,3 @@
-class SimulationNotFoundError(KeyError):
-    """Raised when a simulation session does not exist."""
+"""Compatibility shim for shared domain errors."""
 
-
-class TopologyNotFoundError(ValueError):
-    """Raised when the requested topology is not available."""
-
-
-class SimulationClosedError(RuntimeError):
-    """Raised when an operation targets a closed simulation."""
+from packages.contracts.errors import *  # noqa: F401,F403
