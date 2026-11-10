@@ -9,7 +9,10 @@ from uuid import uuid4
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.adapters.opendss.engine import OpenDSSContextEngine
+from packages.simulation_core.engine import OpenDSSContextEngine
+from services.api_manager.execution.local_executor import (
+    LocalSimulationExecutor,
+)
 from app.adapters.opendss.topology_catalog import resolve_topology
 from app.domain.errors import SimulationClosedError, SimulationNotFoundError
 from app.domain.models import (
@@ -57,6 +60,7 @@ class SimulationService:
     def __init__(self) -> None:
         self._sessions: dict[str, SimulationSession] = {}
         self._registry_lock = asyncio.Lock()
+        self._executor = LocalSimulationExecutor()
 
     async def create(
         self, request: CreateSimulationRequest
@@ -69,8 +73,7 @@ class SimulationService:
 
         # Engine construction is synchronous/native. Keep it out of the event
         # loop because future networks can be much heavier than IEEE13.
-        engine = await asyncio.to_thread(
-            OpenDSSContextEngine,
+        engine = await self._executor.create_engine(
             topology_path,
             request.load_multiplier,
         )
@@ -84,7 +87,10 @@ class SimulationService:
             engine=engine,
             lock=asyncio.Lock(),
             status=SimulationStatus.READY,
-            model_summary=engine.model_summary(request.topology.lower()),
+            model_summary=self._executor.model_summary(
+                engine,
+                request.topology.lower(),
+            )
         )
 
         async with self._registry_lock:
@@ -94,8 +100,8 @@ class SimulationService:
             "simulation_created session_id=%s topology=%s context_id=%s load_multiplier=%s",
             session_id,
             session.topology,
-            engine.identity,
-            engine.load_multiplier,
+            self._executor.identity(engine),
+            self._executor.load_multiplier(engine),
         )
         metrics.observe(
             "session_create_ms",
@@ -105,7 +111,7 @@ class SimulationService:
         return CreateSimulationResponse(
             session_id=session_id,
             topology=session.topology,
-            load_multiplier=engine.load_multiplier,
+            load_multiplier=self._executor.load_multiplier(engine),
             created_at=created_at,
         )
 
@@ -143,22 +149,21 @@ class SimulationService:
             await self.broadcast(session, "solving")
             try:
                 if request.simulation_type == "snapshot":
-                    if request.load_multiplier is not None:
-                        await asyncio.to_thread(
-                            session.engine.set_load_multiplier,
-                            request.load_multiplier,
-                        )
-                    result = await asyncio.to_thread(
-                        session.engine.solve,
+                    result = await self._executor.solve_snapshot(
+                        session.engine,
                         session.session_id,
                         session.topology,
+                        request.load_multiplier,
                     )
                 else:
                     config = request.qsts.to_config()
-                    result = await asyncio.to_thread(
-                        session.engine.solve_qsts,
+                    result = await self._executor.solve_qsts(
+                        session.engine,
                         config,
-                        self._qsts_progress_callback(session, asyncio.get_running_loop()),
+                        self._qsts_progress_callback(
+                            session,
+                            asyncio.get_running_loop(),
+                        ),
                     )
             except Exception as exc:
                 session.status = SimulationStatus.ERROR
@@ -206,9 +211,8 @@ class SimulationService:
 
             if session.task_count >= RECYCLE_THRESHOLD:
                 old_engine = session.engine
-                await asyncio.to_thread(old_engine.close)
-                session.engine = await asyncio.to_thread(
-                    OpenDSSContextEngine,
+                await self._executor.close(old_engine)
+                session.engine = await self._executor.create_engine(
                     resolve_topology(session.topology),
                     (
                         result.load_multiplier
@@ -216,8 +220,9 @@ class SimulationService:
                         else result.steps[-1].load_multiplier
                     ),
                 )
-                session.model_summary = await asyncio.to_thread(
-                    session.engine.model_summary, session.topology
+                session.model_summary = self._executor.model_summary(
+                    session.engine,
+                    session.topology,
                 )
                 session.task_count = 0
 
@@ -345,7 +350,7 @@ class SimulationService:
         session = self._get_session(session_id)
         async with session.lock:
             session.status = SimulationStatus.CLOSED
-            await asyncio.to_thread(session.engine.close)
+            await self._executor.close(session.engine)
             await self.broadcast(
                 session, "completed", {"status": SimulationStatus.CLOSED.value}
             )
@@ -419,11 +424,11 @@ class SimulationService:
     def get_engine_identity(self, session_id: str) -> int:
         """Testing hook: proves two sessions do not share one Python context object."""
         session = self._get_session(session_id)
-        return session.engine.identity
+        return self._executor.identity(session.engine)
 
     def get_load_multiplier(self, session_id: str) -> float:
         session = self._get_session(session_id)
-        return session.engine.load_multiplier
+        return self._executor.load_multiplier(session.engine)
 
     def metrics_snapshot(self) -> dict[str, int]:
         statuses = [session.status for session in self._sessions.values()]
