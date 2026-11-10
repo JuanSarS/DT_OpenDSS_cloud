@@ -1,0 +1,12 @@
+{
+  "timestamp": "20261016T072357Z",
+  "run_id": "20261016T072357Z_nube_ieee123_qsts",
+  "environment": "nube",
+  "base_url": "http://52.14.70.89:8000",
+  "model": "ieee123",
+  "simulation": "qsts",
+  "iterations": 30,
+  "duration_hours": 24.0,
+  "step_minutes": 5.0,
+  "profile": "synthetic_daily"
+}

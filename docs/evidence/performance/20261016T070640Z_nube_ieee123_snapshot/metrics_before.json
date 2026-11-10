@@ -1,0 +1,88 @@
+{
+  "timestamp": 1792134401.461136,
+  "started_at": 1792129960.0044668,
+  "process": {
+    "pid": 1,
+    "rss_mb": 156.941,
+    "cpu_percent": 0.0,
+    "threads": 8
+  },
+  "sessions": {
+    "active": 1,
+    "running": 0,
+    "completed": 1,
+    "error": 0
+  },
+  "rest": {
+    "session_create_ms": {
+      "count": 1,
+      "mean": 343.77,
+      "min": 343.77,
+      "p50": 343.77,
+      "p95": 343.77,
+      "p99": 343.77,
+      "max": 343.77
+    },
+    "snapshot_request_ms": {
+      "count": 1,
+      "mean": 1045.134,
+      "min": 1045.134,
+      "p50": 1045.134,
+      "p95": 1045.134,
+      "p99": 1045.134,
+      "max": 1045.134
+    },
+    "get_results_ms": {
+      "count": 2,
+      "mean": 29.293,
+      "min": 28.566,
+      "p50": 29.293,
+      "p95": 29.947,
+      "p99": 30.005,
+      "max": 30.02
+    }
+  },
+  "snapshot": {
+    "solve_count": 1,
+    "solve": {
+      "count": 1,
+      "mean": 119.421,
+      "min": 119.421,
+      "p50": 119.421,
+      "p95": 119.421,
+      "p99": 119.421,
+      "max": 119.421
+    }
+  },
+  "qsts": {
+    "runs": 0,
+    "total_steps": 0,
+    "elapsed": {
+      "count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "step": {
+      "count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    }
+  },
+  "counters": {
+    "snapshot_runs": 1
+  },
+  "sample_count": {
+    "session_create_ms": 1,
+    "snapshot_solve_ms": 1,
+    "snapshot_request_ms": 1,
+    "get_results_ms": 2
+  }
+}
