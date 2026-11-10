@@ -1,0 +1,1499 @@
+﻿{
+    "openapi":  "3.1.0",
+    "info":  {
+                 "title":  "OpenDSS Cloud API",
+                 "description":  "Gemelo digital hÃ­brido con sesiones OpenDSS aisladas y observadores WebSocket.",
+                 "version":  "0.1.0"
+             },
+    "paths":  {
+                  "/health":  {
+                                  "get":  {
+                                              "tags":  [
+                                                           "health"
+                                                       ],
+                                              "summary":  "Health",
+                                              "operationId":  "health_health_get",
+                                              "responses":  {
+                                                                "200":  {
+                                                                            "description":  "Successful Response",
+                                                                            "content":  {
+                                                                                            "application/json":  {
+                                                                                                                     "schema":  {
+                                                                                                                                    "additionalProperties":  {
+                                                                                                                                                                 "type":  "string"
+                                                                                                                                                             },
+                                                                                                                                    "type":  "object",
+                                                                                                                                    "title":  "Response Health Health Get"
+                                                                                                                                }
+                                                                                                                 }
+                                                                                        }
+                                                                        }
+                                                            }
+                                          }
+                              },
+                  "/metrics":  {
+                                   "get":  {
+                                               "tags":  [
+                                                            "metrics"
+                                                        ],
+                                               "summary":  "Consultar mÃ©tricas internas de rendimiento",
+                                               "operationId":  "get_metrics_metrics_get",
+                                               "responses":  {
+                                                                 "200":  {
+                                                                             "description":  "Successful Response",
+                                                                             "content":  {
+                                                                                             "application/json":  {
+                                                                                                                      "schema":  {
+                                                                                                                                     "additionalProperties":  true,
+                                                                                                                                     "type":  "object",
+                                                                                                                                     "title":  "Response Get Metrics Metrics Get"
+                                                                                                                                 }
+                                                                                                                  }
+                                                                                         }
+                                                                         }
+                                                             }
+                                           }
+                               },
+                  "/models":  {
+                                  "get":  {
+                                              "tags":  [
+                                                           "models"
+                                                       ],
+                                              "summary":  "List Models",
+                                              "operationId":  "list_models_models_get",
+                                              "responses":  {
+                                                                "200":  {
+                                                                            "description":  "Successful Response",
+                                                                            "content":  {
+                                                                                            "application/json":  {
+                                                                                                                     "schema":  {
+                                                                                                                                    "items":  {
+                                                                                                                                                  "additionalProperties":  true,
+                                                                                                                                                  "type":  "object"
+                                                                                                                                              },
+                                                                                                                                    "type":  "array",
+                                                                                                                                    "title":  "Response List Models Models Get"
+                                                                                                                                }
+                                                                                                                 }
+                                                                                        }
+                                                                        }
+                                                            }
+                                          }
+                              },
+                  "/models/upload":  {
+                                         "post":  {
+                                                      "tags":  [
+                                                                   "models"
+                                                               ],
+                                                      "summary":  "Upload Model",
+                                                      "operationId":  "upload_model_models_upload_post",
+                                                      "requestBody":  {
+                                                                          "content":  {
+                                                                                          "multipart/form-data":  {
+                                                                                                                      "schema":  {
+                                                                                                                                     "$ref":  "#/components/schemas/Body_upload_model_models_upload_post"
+                                                                                                                                 }
+                                                                                                                  }
+                                                                                      },
+                                                                          "required":  true
+                                                                      },
+                                                      "responses":  {
+                                                                        "201":  {
+                                                                                    "description":  "Successful Response",
+                                                                                    "content":  {
+                                                                                                    "application/json":  {
+                                                                                                                             "schema":  {
+                                                                                                                                            "additionalProperties":  true,
+                                                                                                                                            "type":  "object",
+                                                                                                                                            "title":  "Response Upload Model Models Upload Post"
+                                                                                                                                        }
+                                                                                                                         }
+                                                                                                }
+                                                                                },
+                                                                        "422":  {
+                                                                                    "description":  "Validation Error",
+                                                                                    "content":  {
+                                                                                                    "application/json":  {
+                                                                                                                             "schema":  {
+                                                                                                                                            "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                        }
+                                                                                                                         }
+                                                                                                }
+                                                                                }
+                                                                    }
+                                                  }
+                                     },
+                  "/models/custom/{model_id}":  {
+                                                    "get":  {
+                                                                "tags":  [
+                                                                             "models"
+                                                                         ],
+                                                                "summary":  "Custom Model",
+                                                                "operationId":  "custom_model_models_custom__model_id__get",
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "model_id",
+                                                                                       "in":  "path",
+                                                                                       "required":  true,
+                                                                                       "schema":  {
+                                                                                                      "type":  "string",
+                                                                                                      "title":  "Model Id"
+                                                                                                  }
+                                                                                   }
+                                                                               ],
+                                                                "responses":  {
+                                                                                  "200":  {
+                                                                                              "description":  "Successful Response",
+                                                                                              "content":  {
+                                                                                                              "application/json":  {
+                                                                                                                                       "schema":  {
+                                                                                                                                                      "type":  "object",
+                                                                                                                                                      "additionalProperties":  true,
+                                                                                                                                                      "title":  "Response Custom Model Models Custom  Model Id  Get"
+                                                                                                                                                  }
+                                                                                                                                   }
+                                                                                                          }
+                                                                                          },
+                                                                                  "422":  {
+                                                                                              "description":  "Validation Error",
+                                                                                              "content":  {
+                                                                                                              "application/json":  {
+                                                                                                                                       "schema":  {
+                                                                                                                                                      "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                  }
+                                                                                                                                   }
+                                                                                                          }
+                                                                                          }
+                                                                              }
+                                                            }
+                                                },
+                  "/models/custom/{model_id}/validate":  {
+                                                             "post":  {
+                                                                          "tags":  [
+                                                                                       "models"
+                                                                                   ],
+                                                                          "summary":  "Validate Model",
+                                                                          "operationId":  "validate_model_models_custom__model_id__validate_post",
+                                                                          "parameters":  [
+                                                                                             {
+                                                                                                 "name":  "model_id",
+                                                                                                 "in":  "path",
+                                                                                                 "required":  true,
+                                                                                                 "schema":  {
+                                                                                                                "type":  "string",
+                                                                                                                "title":  "Model Id"
+                                                                                                            }
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "master",
+                                                                                                 "in":  "query",
+                                                                                                 "required":  true,
+                                                                                                 "schema":  {
+                                                                                                                "type":  "string",
+                                                                                                                "title":  "Master"
+                                                                                                            }
+                                                                                             }
+                                                                                         ],
+                                                                          "responses":  {
+                                                                                            "200":  {
+                                                                                                        "description":  "Successful Response",
+                                                                                                        "content":  {
+                                                                                                                        "application/json":  {
+                                                                                                                                                 "schema":  {
+                                                                                                                                                                "type":  "object",
+                                                                                                                                                                "additionalProperties":  true,
+                                                                                                                                                                "title":  "Response Validate Model Models Custom  Model Id  Validate Post"
+                                                                                                                                                            }
+                                                                                                                                             }
+                                                                                                                    }
+                                                                                                    },
+                                                                                            "422":  {
+                                                                                                        "description":  "Validation Error",
+                                                                                                        "content":  {
+                                                                                                                        "application/json":  {
+                                                                                                                                                 "schema":  {
+                                                                                                                                                                "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                            }
+                                                                                                                                             }
+                                                                                                                    }
+                                                                                                    }
+                                                                                        }
+                                                                      }
+                                                         },
+                  "/models/custom/{model_id}/files/{file_path}":  {
+                                                                      "get":  {
+                                                                                  "tags":  [
+                                                                                               "models"
+                                                                                           ],
+                                                                                  "summary":  "Read Custom File",
+                                                                                  "operationId":  "read_custom_file_models_custom__model_id__files__file_path__get",
+                                                                                  "parameters":  [
+                                                                                                     {
+                                                                                                         "name":  "model_id",
+                                                                                                         "in":  "path",
+                                                                                                         "required":  true,
+                                                                                                         "schema":  {
+                                                                                                                        "type":  "string",
+                                                                                                                        "title":  "Model Id"
+                                                                                                                    }
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "name":  "file_path",
+                                                                                                         "in":  "path",
+                                                                                                         "required":  true,
+                                                                                                         "schema":  {
+                                                                                                                        "type":  "string",
+                                                                                                                        "title":  "File Path"
+                                                                                                                    }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "responses":  {
+                                                                                                    "200":  {
+                                                                                                                "description":  "Successful Response",
+                                                                                                                "content":  {
+                                                                                                                                "application/json":  {
+                                                                                                                                                         "schema":  {
+                                                                                                                                                                        "type":  "object",
+                                                                                                                                                                        "additionalProperties":  true,
+                                                                                                                                                                        "title":  "Response Read Custom File Models Custom  Model Id  Files  File Path  Get"
+                                                                                                                                                                    }
+                                                                                                                                                     }
+                                                                                                                            }
+                                                                                                            },
+                                                                                                    "422":  {
+                                                                                                                "description":  "Validation Error",
+                                                                                                                "content":  {
+                                                                                                                                "application/json":  {
+                                                                                                                                                         "schema":  {
+                                                                                                                                                                        "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                    }
+                                                                                                                                                     }
+                                                                                                                            }
+                                                                                                            }
+                                                                                                }
+                                                                              },
+                                                                      "put":  {
+                                                                                  "tags":  [
+                                                                                               "models"
+                                                                                           ],
+                                                                                  "summary":  "Update Custom File",
+                                                                                  "operationId":  "update_custom_file_models_custom__model_id__files__file_path__put",
+                                                                                  "parameters":  [
+                                                                                                     {
+                                                                                                         "name":  "model_id",
+                                                                                                         "in":  "path",
+                                                                                                         "required":  true,
+                                                                                                         "schema":  {
+                                                                                                                        "type":  "string",
+                                                                                                                        "title":  "Model Id"
+                                                                                                                    }
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "name":  "file_path",
+                                                                                                         "in":  "path",
+                                                                                                         "required":  true,
+                                                                                                         "schema":  {
+                                                                                                                        "type":  "string",
+                                                                                                                        "title":  "File Path"
+                                                                                                                    }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "requestBody":  {
+                                                                                                      "required":  true,
+                                                                                                      "content":  {
+                                                                                                                      "application/json":  {
+                                                                                                                                               "schema":  {
+                                                                                                                                                              "$ref":  "#/components/schemas/FileUpdate"
+                                                                                                                                                          }
+                                                                                                                                           }
+                                                                                                                  }
+                                                                                                  },
+                                                                                  "responses":  {
+                                                                                                    "200":  {
+                                                                                                                "description":  "Successful Response",
+                                                                                                                "content":  {
+                                                                                                                                "application/json":  {
+                                                                                                                                                         "schema":  {
+                                                                                                                                                                        "type":  "object",
+                                                                                                                                                                        "additionalProperties":  true,
+                                                                                                                                                                        "title":  "Response Update Custom File Models Custom  Model Id  Files  File Path  Put"
+                                                                                                                                                                    }
+                                                                                                                                                     }
+                                                                                                                            }
+                                                                                                            },
+                                                                                                    "422":  {
+                                                                                                                "description":  "Validation Error",
+                                                                                                                "content":  {
+                                                                                                                                "application/json":  {
+                                                                                                                                                         "schema":  {
+                                                                                                                                                                        "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                                    }
+                                                                                                                                                     }
+                                                                                                                            }
+                                                                                                            }
+                                                                                                }
+                                                                              }
+                                                                  },
+                  "/simulations":  {
+                                       "get":  {
+                                                   "tags":  [
+                                                                "simulations"
+                                                            ],
+                                                   "summary":  "Listar simulaciones activas",
+                                                   "operationId":  "list_simulations_simulations_get",
+                                                   "responses":  {
+                                                                     "200":  {
+                                                                                 "description":  "Successful Response",
+                                                                                 "content":  {
+                                                                                                 "application/json":  {
+                                                                                                                          "schema":  {
+                                                                                                                                         "items":  {
+                                                                                                                                                       "$ref":  "#/components/schemas/SimulationSummary"
+                                                                                                                                                   },
+                                                                                                                                         "type":  "array",
+                                                                                                                                         "title":  "Response List Simulations Simulations Get"
+                                                                                                                                     }
+                                                                                                                      }
+                                                                                             }
+                                                                             }
+                                                                 }
+                                               },
+                                       "post":  {
+                                                    "tags":  [
+                                                                 "simulations"
+                                                             ],
+                                                    "summary":  "Crear una simulaciÃ³n",
+                                                    "description":  "Crea una sesiÃ³n autoritativa con un contexto OpenDSS aislado.",
+                                                    "operationId":  "create_simulation_simulations_post",
+                                                    "requestBody":  {
+                                                                        "content":  {
+                                                                                        "application/json":  {
+                                                                                                                 "schema":  {
+                                                                                                                                "$ref":  "#/components/schemas/CreateSimulationRequest"
+                                                                                                                            }
+                                                                                                             }
+                                                                                    },
+                                                                        "required":  true
+                                                                    },
+                                                    "responses":  {
+                                                                      "201":  {
+                                                                                  "description":  "Successful Response",
+                                                                                  "content":  {
+                                                                                                  "application/json":  {
+                                                                                                                           "schema":  {
+                                                                                                                                          "$ref":  "#/components/schemas/CreateSimulationResponse"
+                                                                                                                                      }
+                                                                                                                       }
+                                                                                              }
+                                                                              },
+                                                                      "422":  {
+                                                                                  "description":  "Validation Error",
+                                                                                  "content":  {
+                                                                                                  "application/json":  {
+                                                                                                                           "schema":  {
+                                                                                                                                          "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                      }
+                                                                                                                       }
+                                                                                              }
+                                                                              }
+                                                                  }
+                                                }
+                                   },
+                  "/simulations/{session_id}":  {
+                                                    "get":  {
+                                                                "tags":  [
+                                                                             "simulations"
+                                                                         ],
+                                                                "summary":  "Consultar una simulaciÃ³n",
+                                                                "operationId":  "get_simulation_simulations__session_id__get",
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "session_id",
+                                                                                       "in":  "path",
+                                                                                       "required":  true,
+                                                                                       "schema":  {
+                                                                                                      "type":  "string",
+                                                                                                      "title":  "Session Id"
+                                                                                                  }
+                                                                                   }
+                                                                               ],
+                                                                "responses":  {
+                                                                                  "200":  {
+                                                                                              "description":  "Successful Response",
+                                                                                              "content":  {
+                                                                                                              "application/json":  {
+                                                                                                                                       "schema":  {
+                                                                                                                                                      "$ref":  "#/components/schemas/SimulationDetail"
+                                                                                                                                                  }
+                                                                                                                                   }
+                                                                                                          }
+                                                                                          },
+                                                                                  "422":  {
+                                                                                              "description":  "Validation Error",
+                                                                                              "content":  {
+                                                                                                              "application/json":  {
+                                                                                                                                       "schema":  {
+                                                                                                                                                      "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                  }
+                                                                                                                                   }
+                                                                                                          }
+                                                                                          }
+                                                                              }
+                                                            },
+                                                    "delete":  {
+                                                                   "tags":  [
+                                                                                "simulations"
+                                                                            ],
+                                                                   "summary":  "Cerrar una simulaciÃ³n",
+                                                                   "operationId":  "delete_simulation_simulations__session_id__delete",
+                                                                   "parameters":  [
+                                                                                      {
+                                                                                          "name":  "session_id",
+                                                                                          "in":  "path",
+                                                                                          "required":  true,
+                                                                                          "schema":  {
+                                                                                                         "type":  "string",
+                                                                                                         "title":  "Session Id"
+                                                                                                     }
+                                                                                      }
+                                                                                  ],
+                                                                   "responses":  {
+                                                                                     "204":  {
+                                                                                                 "description":  "Successful Response"
+                                                                                             },
+                                                                                     "422":  {
+                                                                                                 "description":  "Validation Error",
+                                                                                                 "content":  {
+                                                                                                                 "application/json":  {
+                                                                                                                                          "schema":  {
+                                                                                                                                                         "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                     }
+                                                                                                                                      }
+                                                                                                             }
+                                                                                             }
+                                                                                 }
+                                                               }
+                                                },
+                  "/simulations/{session_id}/results":  {
+                                                            "get":  {
+                                                                        "tags":  [
+                                                                                     "simulations"
+                                                                                 ],
+                                                                        "summary":  "Consultar los resultados de la Ãºltima simulaciÃ³n",
+                                                                        "operationId":  "get_simulation_results_simulations__session_id__results_get",
+                                                                        "parameters":  [
+                                                                                           {
+                                                                                               "name":  "session_id",
+                                                                                               "in":  "path",
+                                                                                               "required":  true,
+                                                                                               "schema":  {
+                                                                                                              "type":  "string",
+                                                                                                              "title":  "Session Id"
+                                                                                                          }
+                                                                                           }
+                                                                                       ],
+                                                                        "responses":  {
+                                                                                          "200":  {
+                                                                                                      "description":  "Successful Response",
+                                                                                                      "content":  {
+                                                                                                                      "application/json":  {
+                                                                                                                                               "schema":  {
+                                                                                                                                                              "type":  "object",
+                                                                                                                                                              "additionalProperties":  true,
+                                                                                                                                                              "title":  "Response Get Simulation Results Simulations  Session Id  Results Get"
+                                                                                                                                                          }
+                                                                                                                                           }
+                                                                                                                  }
+                                                                                                  },
+                                                                                          "422":  {
+                                                                                                      "description":  "Validation Error",
+                                                                                                      "content":  {
+                                                                                                                      "application/json":  {
+                                                                                                                                               "schema":  {
+                                                                                                                                                              "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                          }
+                                                                                                                                           }
+                                                                                                                  }
+                                                                                                  }
+                                                                                      }
+                                                                    }
+                                                        },
+                  "/simulations/{session_id}/solve":  {
+                                                          "post":  {
+                                                                       "tags":  [
+                                                                                    "simulations"
+                                                                                ],
+                                                                       "summary":  "Resolver una simulaciÃ³n",
+                                                                       "description":  "Ejecuta Snapshot o QSTS fuera del event loop. Sin body conserva el comportamiento Snapshot.",
+                                                                       "operationId":  "solve_simulation_simulations__session_id__solve_post",
+                                                                       "parameters":  [
+                                                                                          {
+                                                                                              "name":  "session_id",
+                                                                                              "in":  "path",
+                                                                                              "required":  true,
+                                                                                              "schema":  {
+                                                                                                             "type":  "string",
+                                                                                                             "title":  "Session Id"
+                                                                                                         }
+                                                                                          }
+                                                                                      ],
+                                                                       "requestBody":  {
+                                                                                           "content":  {
+                                                                                                           "application/json":  {
+                                                                                                                                    "schema":  {
+                                                                                                                                                   "anyOf":  [
+                                                                                                                                                                 {
+                                                                                                                                                                     "$ref":  "#/components/schemas/SolveRequest"
+                                                                                                                                                                 },
+                                                                                                                                                                 {
+                                                                                                                                                                     "type":  "null"
+                                                                                                                                                                 }
+                                                                                                                                                             ],
+                                                                                                                                                   "title":  "Request"
+                                                                                                                                               }
+                                                                                                                                }
+                                                                                                       }
+                                                                                       },
+                                                                       "responses":  {
+                                                                                         "200":  {
+                                                                                                     "description":  "Successful Response",
+                                                                                                     "content":  {
+                                                                                                                     "application/json":  {
+                                                                                                                                              "schema":  {
+                                                                                                                                                             "anyOf":  [
+                                                                                                                                                                           {
+                                                                                                                                                                               "$ref":  "#/components/schemas/SolveResponse"
+                                                                                                                                                                           },
+                                                                                                                                                                           {
+                                                                                                                                                                               "$ref":  "#/components/schemas/QSTSSolveResponse"
+                                                                                                                                                                           }
+                                                                                                                                                                       ],
+                                                                                                                                                             "title":  "Response Solve Simulation Simulations  Session Id  Solve Post"
+                                                                                                                                                         }
+                                                                                                                                          }
+                                                                                                                 }
+                                                                                                 },
+                                                                                         "422":  {
+                                                                                                     "description":  "Validation Error",
+                                                                                                     "content":  {
+                                                                                                                     "application/json":  {
+                                                                                                                                              "schema":  {
+                                                                                                                                                             "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                                         }
+                                                                                                                                          }
+                                                                                                                 }
+                                                                                                 }
+                                                                                     }
+                                                                   }
+                                                      }
+              },
+    "components":  {
+                       "schemas":  {
+                                       "Body_upload_model_models_upload_post":  {
+                                                                                    "properties":  {
+                                                                                                       "file":  {
+                                                                                                                    "type":  "string",
+                                                                                                                    "format":  "binary",
+                                                                                                                    "title":  "File"
+                                                                                                                }
+                                                                                                   },
+                                                                                    "type":  "object",
+                                                                                    "required":  [
+                                                                                                     "file"
+                                                                                                 ],
+                                                                                    "title":  "Body_upload_model_models_upload_post"
+                                                                                },
+                                       "ComplexValue":  {
+                                                            "properties":  {
+                                                                               "real":  {
+                                                                                            "type":  "number",
+                                                                                            "title":  "Real"
+                                                                                        },
+                                                                               "imag":  {
+                                                                                            "type":  "number",
+                                                                                            "title":  "Imag"
+                                                                                        },
+                                                                               "magnitude":  {
+                                                                                                 "type":  "number",
+                                                                                                 "title":  "Magnitude"
+                                                                                             },
+                                                                               "angle_deg":  {
+                                                                                                 "type":  "number",
+                                                                                                 "title":  "Angle Deg"
+                                                                                             }
+                                                                           },
+                                                            "type":  "object",
+                                                            "required":  [
+                                                                             "real",
+                                                                             "imag",
+                                                                             "magnitude",
+                                                                             "angle_deg"
+                                                                         ],
+                                                            "title":  "ComplexValue"
+                                                        },
+                                       "CreateSimulationRequest":  {
+                                                                       "properties":  {
+                                                                                          "topology":  {
+                                                                                                           "type":  "string",
+                                                                                                           "title":  "Topology",
+                                                                                                           "description":  "Logical topology name registered in the topology catalog.",
+                                                                                                           "default":  "ieee13"
+                                                                                                       },
+                                                                                          "load_multiplier":  {
+                                                                                                                  "type":  "number",
+                                                                                                                  "maximum":  5.0,
+                                                                                                                  "exclusiveMinimum":  0.0,
+                                                                                                                  "title":  "Load Multiplier",
+                                                                                                                  "description":  "OpenDSS load multiplier. Useful for isolation tests.",
+                                                                                                                  "default":  1.0
+                                                                                                              }
+                                                                                      },
+                                                                       "type":  "object",
+                                                                       "title":  "CreateSimulationRequest"
+                                                                   },
+                                       "CreateSimulationResponse":  {
+                                                                        "properties":  {
+                                                                                           "session_id":  {
+                                                                                                              "type":  "string",
+                                                                                                              "title":  "Session Id"
+                                                                                                          },
+                                                                                           "topology":  {
+                                                                                                            "type":  "string",
+                                                                                                            "title":  "Topology"
+                                                                                                        },
+                                                                                           "load_multiplier":  {
+                                                                                                                   "type":  "number",
+                                                                                                                   "title":  "Load Multiplier"
+                                                                                                               },
+                                                                                           "created_at":  {
+                                                                                                              "type":  "string",
+                                                                                                              "format":  "date-time",
+                                                                                                              "title":  "Created At"
+                                                                                                          }
+                                                                                       },
+                                                                        "type":  "object",
+                                                                        "required":  [
+                                                                                         "session_id",
+                                                                                         "topology",
+                                                                                         "load_multiplier",
+                                                                                         "created_at"
+                                                                                     ],
+                                                                        "title":  "CreateSimulationResponse"
+                                                                    },
+                                       "FileUpdate":  {
+                                                          "properties":  {
+                                                                             "content":  {
+                                                                                             "type":  "string",
+                                                                                             "maxLength":  2000000,
+                                                                                             "title":  "Content"
+                                                                                         }
+                                                                         },
+                                                          "type":  "object",
+                                                          "required":  [
+                                                                           "content"
+                                                                       ],
+                                                          "title":  "FileUpdate"
+                                                      },
+                                       "HTTPValidationError":  {
+                                                                   "properties":  {
+                                                                                      "detail":  {
+                                                                                                     "items":  {
+                                                                                                                   "$ref":  "#/components/schemas/ValidationError"
+                                                                                                               },
+                                                                                                     "type":  "array",
+                                                                                                     "title":  "Detail"
+                                                                                                 }
+                                                                                  },
+                                                                   "type":  "object",
+                                                                   "title":  "HTTPValidationError"
+                                                               },
+                                       "ModelSummary":  {
+                                                            "properties":  {
+                                                                               "topology":  {
+                                                                                                "type":  "string",
+                                                                                                "title":  "Topology"
+                                                                                            },
+                                                                               "num_buses":  {
+                                                                                                 "type":  "integer",
+                                                                                                 "title":  "Num Buses"
+                                                                                             },
+                                                                               "num_nodes":  {
+                                                                                                 "type":  "integer",
+                                                                                                 "title":  "Num Nodes"
+                                                                                             },
+                                                                               "node_names":  {
+                                                                                                  "items":  {
+                                                                                                                "type":  "string"
+                                                                                                            },
+                                                                                                  "type":  "array",
+                                                                                                  "title":  "Node Names"
+                                                                                              }
+                                                                           },
+                                                            "type":  "object",
+                                                            "required":  [
+                                                                             "topology",
+                                                                             "num_buses",
+                                                                             "num_nodes",
+                                                                             "node_names"
+                                                                         ],
+                                                            "title":  "ModelSummary"
+                                                        },
+                                       "QSTSConfig":  {
+                                                          "properties":  {
+                                                                             "duration_hours":  {
+                                                                                                    "type":  "number",
+                                                                                                    "exclusiveMinimum":  0.0,
+                                                                                                    "title":  "Duration Hours",
+                                                                                                    "default":  24.0
+                                                                                                },
+                                                                             "step_minutes":  {
+                                                                                                  "type":  "number",
+                                                                                                  "exclusiveMinimum":  0.0,
+                                                                                                  "title":  "Step Minutes",
+                                                                                                  "default":  5.0
+                                                                                              },
+                                                                             "profile_source":  {
+                                                                                                    "type":  "string",
+                                                                                                    "enum":  [
+                                                                                                                 "constant",
+                                                                                                                 "synthetic_daily",
+                                                                                                                 "model",
+                                                                                                                 "values"
+                                                                                                             ],
+                                                                                                    "title":  "Profile Source",
+                                                                                                    "default":  "constant"
+                                                                                                },
+                                                                             "load_multiplier":  {
+                                                                                                     "type":  "number",
+                                                                                                     "exclusiveMinimum":  0.0,
+                                                                                                     "title":  "Load Multiplier",
+                                                                                                     "default":  1.0
+                                                                                                 },
+                                                                             "load_multipliers":  {
+                                                                                                      "anyOf":  [
+                                                                                                                    {
+                                                                                                                        "items":  {
+                                                                                                                                      "type":  "number"
+                                                                                                                                  },
+                                                                                                                        "type":  "array"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "type":  "null"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                      "title":  "Load Multipliers"
+                                                                                                  }
+                                                                         },
+                                                          "type":  "object",
+                                                          "title":  "QSTSConfig"
+                                                      },
+                                       "QSTSResult":  {
+                                                          "properties":  {
+                                                                             "config":  {
+                                                                                            "$ref":  "#/components/schemas/QSTSConfig"
+                                                                                        },
+                                                                             "total_steps":  {
+                                                                                                 "type":  "integer",
+                                                                                                 "minimum":  1.0,
+                                                                                                 "title":  "Total Steps"
+                                                                                             },
+                                                                             "converged_steps":  {
+                                                                                                     "type":  "integer",
+                                                                                                     "minimum":  0.0,
+                                                                                                     "title":  "Converged Steps"
+                                                                                                 },
+                                                                             "failed_steps":  {
+                                                                                                  "type":  "integer",
+                                                                                                  "minimum":  0.0,
+                                                                                                  "title":  "Failed Steps"
+                                                                                              },
+                                                                             "elapsed_ms":  {
+                                                                                                "type":  "number",
+                                                                                                "minimum":  0.0,
+                                                                                                "title":  "Elapsed Ms"
+                                                                                            },
+                                                                             "solve_mean_ms":  {
+                                                                                                   "type":  "number",
+                                                                                                   "minimum":  0.0,
+                                                                                                   "title":  "Solve Mean Ms"
+                                                                                               },
+                                                                             "solve_p50_ms":  {
+                                                                                                  "type":  "number",
+                                                                                                  "minimum":  0.0,
+                                                                                                  "title":  "Solve P50 Ms"
+                                                                                              },
+                                                                             "solve_p95_ms":  {
+                                                                                                  "type":  "number",
+                                                                                                  "minimum":  0.0,
+                                                                                                  "title":  "Solve P95 Ms"
+                                                                                              },
+                                                                             "solve_max_ms":  {
+                                                                                                  "type":  "number",
+                                                                                                  "minimum":  0.0,
+                                                                                                  "title":  "Solve Max Ms"
+                                                                                              },
+                                                                             "rss_start_mb":  {
+                                                                                                  "anyOf":  [
+                                                                                                                {
+                                                                                                                    "type":  "number",
+                                                                                                                    "minimum":  0.0
+                                                                                                                },
+                                                                                                                {
+                                                                                                                    "type":  "null"
+                                                                                                                }
+                                                                                                            ],
+                                                                                                  "title":  "Rss Start Mb"
+                                                                                              },
+                                                                             "rss_peak_mb":  {
+                                                                                                 "anyOf":  [
+                                                                                                               {
+                                                                                                                   "type":  "number",
+                                                                                                                   "minimum":  0.0
+                                                                                                               },
+                                                                                                               {
+                                                                                                                   "type":  "null"
+                                                                                                               }
+                                                                                                           ],
+                                                                                                 "title":  "Rss Peak Mb"
+                                                                                             },
+                                                                             "steps":  {
+                                                                                           "items":  {
+                                                                                                         "$ref":  "#/components/schemas/QSTSStepResult"
+                                                                                                     },
+                                                                                           "type":  "array",
+                                                                                           "title":  "Steps"
+                                                                                       }
+                                                                         },
+                                                          "type":  "object",
+                                                          "required":  [
+                                                                           "config",
+                                                                           "total_steps",
+                                                                           "converged_steps",
+                                                                           "failed_steps",
+                                                                           "elapsed_ms",
+                                                                           "solve_mean_ms",
+                                                                           "solve_p50_ms",
+                                                                           "solve_p95_ms",
+                                                                           "solve_max_ms",
+                                                                           "steps"
+                                                                       ],
+                                                          "title":  "QSTSResult"
+                                                      },
+                                       "QSTSSolveRequest":  {
+                                                                "properties":  {
+                                                                                   "duration_hours":  {
+                                                                                                          "type":  "number",
+                                                                                                          "exclusiveMinimum":  0.0,
+                                                                                                          "title":  "Duration Hours",
+                                                                                                          "description":  "DuraciÃ³n total de la simulaciÃ³n temporal en horas.",
+                                                                                                          "default":  24.0
+                                                                                                      },
+                                                                                   "step_minutes":  {
+                                                                                                        "type":  "number",
+                                                                                                        "exclusiveMinimum":  0.0,
+                                                                                                        "title":  "Step Minutes",
+                                                                                                        "description":  "TamaÃ±o de cada paso temporal en minutos.",
+                                                                                                        "default":  5.0
+                                                                                                    },
+                                                                                   "profile_source":  {
+                                                                                                          "type":  "string",
+                                                                                                          "enum":  [
+                                                                                                                       "constant",
+                                                                                                                       "synthetic_daily",
+                                                                                                                       "model",
+                                                                                                                       "values"
+                                                                                                                   ],
+                                                                                                          "title":  "Profile Source",
+                                                                                                          "description":  "Origen del multiplicador temporal.",
+                                                                                                          "default":  "constant"
+                                                                                                      },
+                                                                                   "load_multiplier":  {
+                                                                                                           "anyOf":  [
+                                                                                                                         {
+                                                                                                                             "type":  "number",
+                                                                                                                             "exclusiveMinimum":  0.0
+                                                                                                                         },
+                                                                                                                         {
+                                                                                                                             "type":  "null"
+                                                                                                                         }
+                                                                                                                     ],
+                                                                                                           "title":  "Load Multiplier",
+                                                                                                           "description":  "Multiplicador constante para el perfil constant."
+                                                                                                       },
+                                                                                   "load_multipliers":  {
+                                                                                                            "anyOf":  [
+                                                                                                                          {
+                                                                                                                              "items":  {
+                                                                                                                                            "type":  "number"
+                                                                                                                                        },
+                                                                                                                              "type":  "array"
+                                                                                                                          },
+                                                                                                                          {
+                                                                                                                              "type":  "null"
+                                                                                                                          }
+                                                                                                                      ],
+                                                                                                            "title":  "Load Multipliers",
+                                                                                                            "description":  "Un multiplicador positivo por cada paso para profile_source=values."
+                                                                                                        }
+                                                                               },
+                                                                "type":  "object",
+                                                                "title":  "QSTSSolveRequest"
+                                                            },
+                                       "QSTSSolveResponse":  {
+                                                                 "properties":  {
+                                                                                    "session_id":  {
+                                                                                                       "type":  "string",
+                                                                                                       "title":  "Session Id"
+                                                                                                   },
+                                                                                    "simulation_type":  {
+                                                                                                            "type":  "string",
+                                                                                                            "const":  "qsts",
+                                                                                                            "title":  "Simulation Type",
+                                                                                                            "default":  "qsts"
+                                                                                                        },
+                                                                                    "status":  {
+                                                                                                   "$ref":  "#/components/schemas/SimulationStatus"
+                                                                                               },
+                                                                                    "summary":  {
+                                                                                                    "$ref":  "#/components/schemas/QSTSSolveSummary"
+                                                                                                }
+                                                                                },
+                                                                 "type":  "object",
+                                                                 "required":  [
+                                                                                  "session_id",
+                                                                                  "status",
+                                                                                  "summary"
+                                                                              ],
+                                                                 "title":  "QSTSSolveResponse"
+                                                             },
+                                       "QSTSSolveSummary":  {
+                                                                "properties":  {
+                                                                                   "total_steps":  {
+                                                                                                       "type":  "integer",
+                                                                                                       "title":  "Total Steps"
+                                                                                                   },
+                                                                                   "converged_steps":  {
+                                                                                                           "type":  "integer",
+                                                                                                           "title":  "Converged Steps"
+                                                                                                       },
+                                                                                   "failed_steps":  {
+                                                                                                        "type":  "integer",
+                                                                                                        "title":  "Failed Steps"
+                                                                                                    },
+                                                                                   "elapsed_ms":  {
+                                                                                                      "type":  "number",
+                                                                                                      "title":  "Elapsed Ms"
+                                                                                                  },
+                                                                                   "solve_mean_ms":  {
+                                                                                                         "type":  "number",
+                                                                                                         "title":  "Solve Mean Ms"
+                                                                                                     },
+                                                                                   "solve_p50_ms":  {
+                                                                                                        "type":  "number",
+                                                                                                        "title":  "Solve P50 Ms"
+                                                                                                    },
+                                                                                   "solve_p95_ms":  {
+                                                                                                        "type":  "number",
+                                                                                                        "title":  "Solve P95 Ms"
+                                                                                                    },
+                                                                                   "solve_max_ms":  {
+                                                                                                        "type":  "number",
+                                                                                                        "title":  "Solve Max Ms"
+                                                                                                    },
+                                                                                   "rss_start_mb":  {
+                                                                                                        "anyOf":  [
+                                                                                                                      {
+                                                                                                                          "type":  "number"
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "type":  "null"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                        "title":  "Rss Start Mb"
+                                                                                                    },
+                                                                                   "rss_peak_mb":  {
+                                                                                                       "anyOf":  [
+                                                                                                                     {
+                                                                                                                         "type":  "number"
+                                                                                                                     },
+                                                                                                                     {
+                                                                                                                         "type":  "null"
+                                                                                                                     }
+                                                                                                                 ],
+                                                                                                       "title":  "Rss Peak Mb"
+                                                                                                   }
+                                                                               },
+                                                                "type":  "object",
+                                                                "required":  [
+                                                                                 "total_steps",
+                                                                                 "converged_steps",
+                                                                                 "failed_steps",
+                                                                                 "elapsed_ms",
+                                                                                 "solve_mean_ms",
+                                                                                 "solve_p50_ms",
+                                                                                 "solve_p95_ms",
+                                                                                 "solve_max_ms",
+                                                                                 "rss_start_mb",
+                                                                                 "rss_peak_mb"
+                                                                             ],
+                                                                "title":  "QSTSSolveSummary"
+                                                            },
+                                       "QSTSStepResult":  {
+                                                              "properties":  {
+                                                                                 "step":  {
+                                                                                              "type":  "integer",
+                                                                                              "minimum":  1.0,
+                                                                                              "title":  "Step"
+                                                                                          },
+                                                                                 "simulated_minutes":  {
+                                                                                                           "type":  "number",
+                                                                                                           "minimum":  0.0,
+                                                                                                           "title":  "Simulated Minutes"
+                                                                                                       },
+                                                                                 "simulated_hour":  {
+                                                                                                        "type":  "number",
+                                                                                                        "minimum":  0.0,
+                                                                                                        "title":  "Simulated Hour"
+                                                                                                    },
+                                                                                 "opendss_hour":  {
+                                                                                                      "anyOf":  [
+                                                                                                                    {
+                                                                                                                        "type":  "number"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "type":  "null"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                      "title":  "Opendss Hour"
+                                                                                                  },
+                                                                                 "opendss_time_of_step_us":  {
+                                                                                                                 "anyOf":  [
+                                                                                                                               {
+                                                                                                                                   "type":  "number"
+                                                                                                                               },
+                                                                                                                               {
+                                                                                                                                   "type":  "null"
+                                                                                                                               }
+                                                                                                                           ],
+                                                                                                                 "title":  "Opendss Time Of Step Us"
+                                                                                                             },
+                                                                                 "converged":  {
+                                                                                                   "type":  "boolean",
+                                                                                                   "title":  "Converged"
+                                                                                               },
+                                                                                 "solve_ms":  {
+                                                                                                  "type":  "number",
+                                                                                                  "minimum":  0.0,
+                                                                                                  "title":  "Solve Ms"
+                                                                                              },
+                                                                                 "load_multiplier":  {
+                                                                                                         "type":  "number",
+                                                                                                         "exclusiveMinimum":  0.0,
+                                                                                                         "title":  "Load Multiplier"
+                                                                                                     },
+                                                                                 "total_kw":  {
+                                                                                                  "anyOf":  [
+                                                                                                                {
+                                                                                                                    "type":  "number"
+                                                                                                                },
+                                                                                                                {
+                                                                                                                    "type":  "null"
+                                                                                                                }
+                                                                                                            ],
+                                                                                                  "title":  "Total Kw"
+                                                                                              },
+                                                                                 "total_kvar":  {
+                                                                                                    "anyOf":  [
+                                                                                                                  {
+                                                                                                                      "type":  "number"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "type":  "null"
+                                                                                                                  }
+                                                                                                              ],
+                                                                                                    "title":  "Total Kvar"
+                                                                                                },
+                                                                                 "min_voltage_pu":  {
+                                                                                                        "anyOf":  [
+                                                                                                                      {
+                                                                                                                          "type":  "number"
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "type":  "null"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                        "title":  "Min Voltage Pu"
+                                                                                                    },
+                                                                                 "max_voltage_pu":  {
+                                                                                                        "anyOf":  [
+                                                                                                                      {
+                                                                                                                          "type":  "number"
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "type":  "null"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                        "title":  "Max Voltage Pu"
+                                                                                                    },
+                                                                                 "solution_iterations":  {
+                                                                                                             "anyOf":  [
+                                                                                                                           {
+                                                                                                                               "type":  "integer",
+                                                                                                                               "minimum":  0.0
+                                                                                                                           },
+                                                                                                                           {
+                                                                                                                               "type":  "null"
+                                                                                                                           }
+                                                                                                                       ],
+                                                                                                             "title":  "Solution Iterations"
+                                                                                                         },
+                                                                                 "rss_mb":  {
+                                                                                                "anyOf":  [
+                                                                                                              {
+                                                                                                                  "type":  "number",
+                                                                                                                  "minimum":  0.0
+                                                                                                              },
+                                                                                                              {
+                                                                                                                  "type":  "null"
+                                                                                                              }
+                                                                                                          ],
+                                                                                                "title":  "Rss Mb"
+                                                                                            }
+                                                                             },
+                                                              "type":  "object",
+                                                              "required":  [
+                                                                               "step",
+                                                                               "simulated_minutes",
+                                                                               "simulated_hour",
+                                                                               "converged",
+                                                                               "solve_ms",
+                                                                               "load_multiplier"
+                                                                           ],
+                                                              "title":  "QSTSStepResult"
+                                                          },
+                                       "SimulationDetail":  {
+                                                                "properties":  {
+                                                                                   "session_id":  {
+                                                                                                      "type":  "string",
+                                                                                                      "title":  "Session Id"
+                                                                                                  },
+                                                                                   "topology":  {
+                                                                                                    "type":  "string",
+                                                                                                    "title":  "Topology"
+                                                                                                },
+                                                                                   "status":  {
+                                                                                                  "$ref":  "#/components/schemas/SimulationStatus"
+                                                                                              },
+                                                                                   "created_at":  {
+                                                                                                      "type":  "string",
+                                                                                                      "format":  "date-time",
+                                                                                                      "title":  "Created At"
+                                                                                                  },
+                                                                                   "task_count":  {
+                                                                                                      "type":  "integer",
+                                                                                                      "title":  "Task Count"
+                                                                                                  },
+                                                                                   "model_summary":  {
+                                                                                                         "$ref":  "#/components/schemas/ModelSummary"
+                                                                                                     },
+                                                                                   "simulation_type":  {
+                                                                                                           "anyOf":  [
+                                                                                                                         {
+                                                                                                                             "type":  "string",
+                                                                                                                             "enum":  [
+                                                                                                                                          "snapshot",
+                                                                                                                                          "qsts"
+                                                                                                                                      ]
+                                                                                                                         },
+                                                                                                                         {
+                                                                                                                             "type":  "null"
+                                                                                                                         }
+                                                                                                                     ],
+                                                                                                           "title":  "Simulation Type"
+                                                                                                       },
+                                                                                   "last_result":  {
+                                                                                                       "anyOf":  [
+                                                                                                                     {
+                                                                                                                         "$ref":  "#/components/schemas/SolveResponse"
+                                                                                                                     },
+                                                                                                                     {
+                                                                                                                         "$ref":  "#/components/schemas/QSTSResult"
+                                                                                                                     },
+                                                                                                                     {
+                                                                                                                         "type":  "null"
+                                                                                                                     }
+                                                                                                                 ],
+                                                                                                       "title":  "Last Result"
+                                                                                                   },
+                                                                                   "last_error":  {
+                                                                                                      "anyOf":  [
+                                                                                                                    {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "type":  "null"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                      "title":  "Last Error"
+                                                                                                  },
+                                                                                   "current_step":  {
+                                                                                                        "anyOf":  [
+                                                                                                                      {
+                                                                                                                          "type":  "integer"
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "type":  "null"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                        "title":  "Current Step"
+                                                                                                    },
+                                                                                   "total_steps":  {
+                                                                                                       "anyOf":  [
+                                                                                                                     {
+                                                                                                                         "type":  "integer"
+                                                                                                                     },
+                                                                                                                     {
+                                                                                                                         "type":  "null"
+                                                                                                                     }
+                                                                                                                 ],
+                                                                                                       "title":  "Total Steps"
+                                                                                                   },
+                                                                                   "progress_pct":  {
+                                                                                                        "anyOf":  [
+                                                                                                                      {
+                                                                                                                          "type":  "number"
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                          "type":  "null"
+                                                                                                                      }
+                                                                                                                  ],
+                                                                                                        "title":  "Progress Pct"
+                                                                                                    },
+                                                                                   "simulated_hour":  {
+                                                                                                          "anyOf":  [
+                                                                                                                        {
+                                                                                                                            "type":  "number"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "type":  "null"
+                                                                                                                        }
+                                                                                                                    ],
+                                                                                                          "title":  "Simulated Hour"
+                                                                                                      },
+                                                                                   "last_qsts_step":  {
+                                                                                                          "anyOf":  [
+                                                                                                                        {
+                                                                                                                            "$ref":  "#/components/schemas/QSTSStepResult"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "type":  "null"
+                                                                                                                        }
+                                                                                                                    ]
+                                                                                                      },
+                                                                                   "worker_identity":  {
+                                                                                                           "type":  "integer",
+                                                                                                           "title":  "Worker Identity"
+                                                                                                       }
+                                                                               },
+                                                                "type":  "object",
+                                                                "required":  [
+                                                                                 "session_id",
+                                                                                 "topology",
+                                                                                 "status",
+                                                                                 "created_at",
+                                                                                 "task_count",
+                                                                                 "model_summary",
+                                                                                 "worker_identity"
+                                                                             ],
+                                                                "title":  "SimulationDetail"
+                                                            },
+                                       "SimulationStatus":  {
+                                                                "type":  "string",
+                                                                "enum":  [
+                                                                             "CREATED",
+                                                                             "READY",
+                                                                             "RUNNING",
+                                                                             "COMPLETED",
+                                                                             "CLOSED",
+                                                                             "ERROR"
+                                                                         ],
+                                                                "title":  "SimulationStatus"
+                                                            },
+                                       "SimulationSummary":  {
+                                                                 "properties":  {
+                                                                                    "session_id":  {
+                                                                                                       "type":  "string",
+                                                                                                       "title":  "Session Id"
+                                                                                                   },
+                                                                                    "topology":  {
+                                                                                                     "type":  "string",
+                                                                                                     "title":  "Topology"
+                                                                                                 },
+                                                                                    "status":  {
+                                                                                                   "$ref":  "#/components/schemas/SimulationStatus"
+                                                                                               },
+                                                                                    "created_at":  {
+                                                                                                       "type":  "string",
+                                                                                                       "format":  "date-time",
+                                                                                                       "title":  "Created At"
+                                                                                                   },
+                                                                                    "task_count":  {
+                                                                                                       "type":  "integer",
+                                                                                                       "title":  "Task Count"
+                                                                                                   }
+                                                                                },
+                                                                 "type":  "object",
+                                                                 "required":  [
+                                                                                  "session_id",
+                                                                                  "topology",
+                                                                                  "status",
+                                                                                  "created_at",
+                                                                                  "task_count"
+                                                                              ],
+                                                                 "title":  "SimulationSummary"
+                                                             },
+                                       "SolveRequest":  {
+                                                            "properties":  {
+                                                                               "simulation_type":  {
+                                                                                                       "type":  "string",
+                                                                                                       "enum":  [
+                                                                                                                    "snapshot",
+                                                                                                                    "qsts"
+                                                                                                                ],
+                                                                                                       "title":  "Simulation Type",
+                                                                                                       "description":  "Tipo de simulaciÃ³n a ejecutar.",
+                                                                                                       "default":  "snapshot"
+                                                                                                   },
+                                                                               "load_multiplier":  {
+                                                                                                       "anyOf":  [
+                                                                                                                     {
+                                                                                                                         "type":  "number",
+                                                                                                                         "exclusiveMinimum":  0.0
+                                                                                                                     },
+                                                                                                                     {
+                                                                                                                         "type":  "null"
+                                                                                                                     }
+                                                                                                                 ],
+                                                                                                       "title":  "Load Multiplier",
+                                                                                                       "description":  "Multiplicador para Snapshot o perfil constant de QSTS."
+                                                                                                   },
+                                                                               "qsts":  {
+                                                                                            "anyOf":  [
+                                                                                                          {
+                                                                                                              "$ref":  "#/components/schemas/QSTSSolveRequest"
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "type":  "null"
+                                                                                                          }
+                                                                                                      ],
+                                                                                            "description":  "ConfiguraciÃ³n requerida cuando simulation_type=qsts."
+                                                                                        }
+                                                                           },
+                                                            "type":  "object",
+                                                            "title":  "SolveRequest"
+                                                        },
+                                       "SolveResponse":  {
+                                                             "properties":  {
+                                                                                "session_id":  {
+                                                                                                   "type":  "string",
+                                                                                                   "title":  "Session Id"
+                                                                                               },
+                                                                                "topology":  {
+                                                                                                 "type":  "string",
+                                                                                                 "title":  "Topology"
+                                                                                             },
+                                                                                "converged":  {
+                                                                                                  "type":  "boolean",
+                                                                                                  "title":  "Converged"
+                                                                                              },
+                                                                                "elapsed_ms":  {
+                                                                                                   "type":  "number",
+                                                                                                   "title":  "Elapsed Ms"
+                                                                                               },
+                                                                                "load_multiplier":  {
+                                                                                                        "type":  "number",
+                                                                                                        "title":  "Load Multiplier"
+                                                                                                    },
+                                                                                "total_power_kw":  {
+                                                                                                       "type":  "number",
+                                                                                                       "title":  "Total Power Kw"
+                                                                                                   },
+                                                                                "total_power_kvar":  {
+                                                                                                         "type":  "number",
+                                                                                                         "title":  "Total Power Kvar"
+                                                                                                     },
+                                                                                "voltages":  {
+                                                                                                 "additionalProperties":  {
+                                                                                                                              "$ref":  "#/components/schemas/ComplexValue"
+                                                                                                                          },
+                                                                                                 "type":  "object",
+                                                                                                 "title":  "Voltages"
+                                                                                             },
+                                                                                "currents":  {
+                                                                                                 "additionalProperties":  {
+                                                                                                                              "items":  {
+                                                                                                                                            "$ref":  "#/components/schemas/ComplexValue"
+                                                                                                                                        },
+                                                                                                                              "type":  "array"
+                                                                                                                          },
+                                                                                                 "type":  "object",
+                                                                                                 "title":  "Currents"
+                                                                                             }
+                                                                            },
+                                                             "type":  "object",
+                                                             "required":  [
+                                                                              "session_id",
+                                                                              "topology",
+                                                                              "converged",
+                                                                              "elapsed_ms",
+                                                                              "load_multiplier",
+                                                                              "total_power_kw",
+                                                                              "total_power_kvar",
+                                                                              "voltages",
+                                                                              "currents"
+                                                                          ],
+                                                             "title":  "SolveResponse"
+                                                         },
+                                       "ValidationError":  {
+                                                               "properties":  {
+                                                                                  "loc":  {
+                                                                                              "items":  {
+                                                                                                            "anyOf":  [
+                                                                                                                          {
+                                                                                                                              "type":  "string"
+                                                                                                                          },
+                                                                                                                          {
+                                                                                                                              "type":  "integer"
+                                                                                                                          }
+                                                                                                                      ]
+                                                                                                        },
+                                                                                              "type":  "array",
+                                                                                              "title":  "Location"
+                                                                                          },
+                                                                                  "msg":  {
+                                                                                              "type":  "string",
+                                                                                              "title":  "Message"
+                                                                                          },
+                                                                                  "type":  {
+                                                                                               "type":  "string",
+                                                                                               "title":  "Error Type"
+                                                                                           },
+                                                                                  "input":  {
+                                                                                                "title":  "Input"
+                                                                                            },
+                                                                                  "ctx":  {
+                                                                                              "type":  "object",
+                                                                                              "title":  "Context"
+                                                                                          }
+                                                                              },
+                                                               "type":  "object",
+                                                               "required":  [
+                                                                                "loc",
+                                                                                "msg",
+                                                                                "type"
+                                                                            ],
+                                                               "title":  "ValidationError"
+                                                           }
+                                   }
+                   }
+}
