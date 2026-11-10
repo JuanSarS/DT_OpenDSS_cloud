@@ -1,18 +1,5 @@
-from dataclasses import dataclass
-from pathlib import Path
+"""Compatibility shim for the built-in OpenDSS model catalog."""
 
+from packages.simulation_core.model_catalog import BuiltinModel, builtin_models
 
-@dataclass(frozen=True)
-class BuiltinModel:
-    id: str
-    name: str
-    master: Path
-
-
-def builtin_models(networks_root: Path) -> dict[str, BuiltinModel]:
-    return {
-        "ieee13": BuiltinModel("ieee13", "IEEE 13 Node Test Feeder", networks_root / "ieee13" / "IEEE13Nodeckt.dss"),
-        "ieee34": BuiltinModel("ieee34", "IEEE 34 Bus Test Feeder", networks_root / "ieee34" / "ieee34Mod1.dss"),
-        "ieee123": BuiltinModel("ieee123", "IEEE 123 Node Test Feeder", networks_root / "ieee123" / "IEEE123Master.dss"),
-        "ieee8500": BuiltinModel("ieee8500", "IEEE 8500 Node Test Feeder", networks_root / "ieee8500" / "Master_cloud.dss"),
-    }
+__all__ = ["BuiltinModel", "builtin_models"]
