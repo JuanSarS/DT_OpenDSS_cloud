@@ -9,9 +9,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import asyncio
 from uuid import uuid4
 
-from app.adapters.opendss.topology_catalog import (
-    resolve_topology,
-)
+
 from packages.contracts.jobs import (
     SimulationJob,
 )
@@ -25,9 +23,6 @@ async def main() -> None:
 
     topology = "ieee123"
 
-    topology_path = resolve_topology(
-        topology
-    )
 
     session_a = str(uuid4())
     session_b = str(uuid4())
@@ -35,18 +30,12 @@ async def main() -> None:
     info_a = await executor.prepare_session(
         session_id=session_a,
         topology=topology,
-        topology_source=str(
-            topology_path
-        ),
         load_multiplier=0.8,
     )
 
     info_b = await executor.prepare_session(
         session_id=session_b,
         topology=topology,
-        topology_source=str(
-            topology_path
-        ),
         load_multiplier=1.2,
     )
 

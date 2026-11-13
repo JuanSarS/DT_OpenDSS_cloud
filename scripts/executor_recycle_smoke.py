@@ -7,9 +7,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.adapters.opendss.topology_catalog import (
-    resolve_topology,
-)
+
 from packages.contracts.jobs import (
     SimulationJob,
 )
@@ -27,14 +25,10 @@ async def main() -> None:
 
     session_id = str(uuid4())
 
-    path = resolve_topology(
-        topology
-    )
 
     initial = await executor.prepare_session(
         session_id=session_id,
         topology=topology,
-        topology_source=str(path),
         load_multiplier=1.0,
     )
 

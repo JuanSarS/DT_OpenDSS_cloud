@@ -68,13 +68,9 @@ class RemoteSimulationExecutor:
         *,
         session_id: str,
         topology: str,
-        topology_source: str,
         load_multiplier: float,
     ) -> ExecutorSessionInfo:
-        # topology_source belongs to the API filesystem
-        # and must not cross process boundaries.
-        _ = topology_source
-
+        
         request = (
             WorkerPrepareSessionRequest(
                 session_id=session_id,

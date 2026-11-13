@@ -14,7 +14,9 @@ from packages.contracts.execution  import (
     ProgressHandler,
 )
 
-
+from services.simulation_worker.topology_resolver import (
+    resolve_worker_topology,
+)
 class LocalJobCancelled(Exception):
     """Internal cooperative cancellation signal."""
 
@@ -69,10 +71,9 @@ class LocalSimulationExecutor:
         *,
         session_id: str,
         topology: str,
-        topology_source: str,
         load_multiplier: float,
     ) -> ExecutorSessionInfo:
-        topology_path = Path(topology_source)
+        topology_path = resolve_worker_topology(topology)
 
         engine = await asyncio.to_thread(
             OpenDSSContextEngine,

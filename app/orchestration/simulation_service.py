@@ -7,8 +7,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from fastapi import WebSocket, WebSocketDisconnect
 from uuid import uuid4
-
-from app.adapters.opendss.topology_catalog import resolve_topology
 from app.domain.errors import SimulationClosedError, SimulationNotFoundError
 from app.domain.models import (
     CreateSimulationRequest,
@@ -73,7 +71,6 @@ class SimulationService:
         self, request: CreateSimulationRequest
     ) -> CreateSimulationResponse:
         started_at = time.perf_counter()
-        topology_path = resolve_topology(request.topology)
         async with self._registry_lock:
             if len(self._sessions) >= get_settings().max_active_simulations:
                 raise RuntimeError("Se alcanzó MAX_ACTIVE_SIMULATIONS")
@@ -84,7 +81,6 @@ class SimulationService:
                     await self._executor.prepare_session(
                         session_id=session_id,
                         topology=request.topology.lower(),
-                        topology_source=str(topology_path),
                         load_multiplier=(
                             request.load_multiplier
                         ),

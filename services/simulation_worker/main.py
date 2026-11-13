@@ -25,9 +25,6 @@ from services.simulation_worker.executor import (
 from services.simulation_worker.settings import (
     worker_settings,
 )
-from services.simulation_worker.topology_resolver import (
-    resolve_worker_topology,
-)
 
 
 app = FastAPI(
@@ -62,23 +59,11 @@ async def prepare_session(
     request: WorkerPrepareSessionRequest,
 ) -> WorkerSessionInfo:
     try:
-        topology_path = (
-            resolve_worker_topology(
-                request.topology
-            )
-        )
-
         info = await executor.prepare_session(
             session_id=request.session_id,
             topology=request.topology,
-            topology_source=str(
-                topology_path
-            ),
-            load_multiplier=(
-                request.load_multiplier
-            ),
+            load_multiplier=request.load_multiplier,
         )
-
         return (
             WorkerSessionInfo
             .from_executor_info(info)

@@ -49,7 +49,6 @@ class SimulationExecutor(Protocol):
         *,
         session_id: str,
         topology: str,
-        topology_source: str,
         load_multiplier: float,
     ) -> ExecutorSessionInfo:
         ...

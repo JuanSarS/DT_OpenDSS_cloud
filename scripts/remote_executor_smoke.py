@@ -29,7 +29,6 @@ async def main() -> None:
     info = await executor.prepare_session(
         session_id=session_id,
         topology="ieee123",
-        topology_source="ignored",
         load_multiplier=1.0,
     )
 
