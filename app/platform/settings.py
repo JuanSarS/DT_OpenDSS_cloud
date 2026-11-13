@@ -13,6 +13,7 @@ class Settings(BaseModel):
     max_active_simulations: int = 32
     max_upload_mb: int = 25
     max_upload_files: int = 500
+    execution_backend: str = "local"
     allow_custom_models: bool = True
     custom_models_dir: Path = Path("data/runtime/custom_models")
     cors_origins: str = ""
@@ -25,6 +26,7 @@ class Settings(BaseModel):
             "max_active_simulations": 32,
             "max_upload_mb": 25,
             "max_upload_files": 500,
+            "execution_backend": "local",
             "allow_custom_models": True,
             "custom_models_dir": Path("data/runtime/custom_models"),
             "cors_origins": "",
@@ -33,6 +35,7 @@ class Settings(BaseModel):
             "app_host": "APP_HOST", "app_port": "APP_PORT", "log_level": "LOG_LEVEL",
             "recycle_threshold": "RECYCLE_THRESHOLD", "max_active_simulations": "MAX_ACTIVE_SIMULATIONS",
             "max_upload_mb": "MAX_UPLOAD_MB", "max_upload_files": "MAX_UPLOAD_FILES",
+            "execution_backend": "EXECUTION_BACKEND",
             "allow_custom_models": "ALLOW_CUSTOM_MODELS", "custom_models_dir": "CUSTOM_MODELS_DIR",
             "cors_origins": "CORS_ORIGINS",
         }
@@ -54,3 +57,6 @@ class Settings(BaseModel):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+settings = get_settings()

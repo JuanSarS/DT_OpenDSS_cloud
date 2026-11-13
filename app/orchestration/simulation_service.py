@@ -5,14 +5,9 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from fastapi import WebSocket, WebSocketDisconnect
 from uuid import uuid4
 
-from fastapi import WebSocket, WebSocketDisconnect
-
-from packages.simulation_core.engine import OpenDSSContextEngine
-from services.api_manager.execution.local_executor import (
-    LocalSimulationExecutor,
-)
 from app.adapters.opendss.topology_catalog import resolve_topology
 from app.domain.errors import SimulationClosedError, SimulationNotFoundError
 from app.domain.models import (
@@ -22,17 +17,24 @@ from app.domain.models import (
     SimulationDetail,
     SimulationStatus,
     SimulationSummary,
-    QSTSConfig,
     QSTSResult,
     QSTSStepResult,
     SolveRequest,
     SolveResponse,
 )
+from packages.contracts.jobs import (
+    SimulationJob,
+)
+from packages.contracts.progress import (
+    SimulationProgress,
+)
+from services.api_manager.execution.base import (
+    SimulationExecutor,
+)
 from app.platform.settings import get_settings
 from app.platform.metrics import metrics
 
 logger = logging.getLogger(__name__)
-RECYCLE_THRESHOLD = get_settings().recycle_threshold
 
 
 @dataclass
@@ -40,10 +42,12 @@ class SimulationSession:
     session_id: str
     topology: str
     created_at: datetime
-    engine: OpenDSSContextEngine
     lock: asyncio.Lock
     model_summary: ModelSummary
+    runtime_identity: int | str | None = None
+    load_multiplier: float = 1.0
     status: SimulationStatus = SimulationStatus.CREATED
+    current_job_id: str | None = None
     task_count: int = 0
     last_result: SolveResponse | QSTSResult | None = None
     simulation_type: str | None = None
@@ -57,10 +61,13 @@ class SimulationSession:
 
 
 class SimulationService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        executor: SimulationExecutor,
+    ) -> None:
         self._sessions: dict[str, SimulationSession] = {}
         self._registry_lock = asyncio.Lock()
-        self._executor = LocalSimulationExecutor()
+        self._executor = executor
 
     async def create(
         self, request: CreateSimulationRequest
@@ -71,26 +78,28 @@ class SimulationService:
             if len(self._sessions) >= get_settings().max_active_simulations:
                 raise RuntimeError("Se alcanzó MAX_ACTIVE_SIMULATIONS")
 
-        # Engine construction is synchronous/native. Keep it out of the event
-        # loop because future networks can be much heavier than IEEE13.
-        engine = await self._executor.create_engine(
-            topology_path,
-            request.load_multiplier,
-        )
-
         session_id = str(uuid4())
         created_at = datetime.now(timezone.utc)
+        execution_info = (
+                    await self._executor.prepare_session(
+                        session_id=session_id,
+                        topology=request.topology.lower(),
+                        topology_source=str(topology_path),
+                        load_multiplier=(
+                            request.load_multiplier
+                        ),
+                    )
+                )
         session = SimulationSession(
             session_id=session_id,
-            topology=request.topology,
-            created_at=created_at,
-            engine=engine,
-            lock=asyncio.Lock(),
+            topology=request.topology.lower(),
             status=SimulationStatus.READY,
-            model_summary=self._executor.model_summary(
-                engine,
-                request.topology.lower(),
-            )
+            model_summary=execution_info.model_summary,
+            task_count=execution_info.task_count,
+            lock=asyncio.Lock(),
+            created_at=created_at,
+            runtime_identity=execution_info.runtime_identity,
+            load_multiplier=execution_info.load_multiplier,
         )
 
         async with self._registry_lock:
@@ -100,8 +109,8 @@ class SimulationService:
             "simulation_created session_id=%s topology=%s context_id=%s load_multiplier=%s",
             session_id,
             session.topology,
-            self._executor.identity(engine),
-            self._executor.load_multiplier(engine),
+            execution_info.runtime_identity,
+            execution_info.load_multiplier,
         )
         metrics.observe(
             "session_create_ms",
@@ -111,7 +120,7 @@ class SimulationService:
         return CreateSimulationResponse(
             session_id=session_id,
             topology=session.topology,
-            load_multiplier=self._executor.load_multiplier(engine),
+            load_multiplier=execution_info.load_multiplier,
             created_at=created_at,
         )
 
@@ -139,7 +148,40 @@ class SimulationService:
             session.total_steps = None
             session.progress_pct = None
             session.simulated_hour = None
+            execution_info = (
+                await self._executor.session_info(
+                    session.session_id
+                )
+            )
+            effective_load_multiplier = (
+                request.load_multiplier
+                if request.load_multiplier is not None
+                else execution_info.load_multiplier
+            )
+            session.load_multiplier = effective_load_multiplier
             session.last_qsts_step = None
+
+            job_id = str(uuid4())
+            session.current_job_id = job_id
+
+            qsts_config = (
+                request.qsts.to_config()
+                if request.simulation_type == "qsts"
+                and request.qsts is not None
+                else None
+            )
+            job = SimulationJob(
+                job_id=job_id,
+                session_id=session.session_id,
+                topology=session.topology,
+                simulation_type=(
+                    request.simulation_type
+                ),
+                load_multiplier=(
+                    effective_load_multiplier
+                ),
+                qsts=qsts_config,
+            )
             if request.simulation_type == "qsts" and request.qsts is not None:
                 session.total_steps = request.qsts.to_config().total_steps
             await self.broadcast(session, "simulation_started")
@@ -148,22 +190,36 @@ class SimulationService:
             )
             await self.broadcast(session, "solving")
             try:
-                if request.simulation_type == "snapshot":
-                    result = await self._executor.solve_snapshot(
-                        session.engine,
-                        session.session_id,
-                        session.topology,
-                        request.load_multiplier,
-                    )
-                else:
-                    config = request.qsts.to_config()
-                    result = await self._executor.solve_qsts(
-                        session.engine,
-                        config,
-                        self._qsts_progress_callback(
+                if job.simulation_type == "qsts":
+
+                    async def progress_handler(
+                        progress: SimulationProgress,
+                    ) -> None:
+                        await self._handle_executor_progress(
                             session,
-                            asyncio.get_running_loop(),
-                        ),
+                            progress,
+                        )
+
+                    execution_result = await self._executor.submit(
+                        job,
+                        progress_handler=progress_handler,
+                    )
+                    if execution_result.qsts is None:
+                        raise RuntimeError(
+                            "QSTS execution returned "
+                            "no QSTS result"
+                            )
+                    result = execution_result.qsts
+                elif job.simulation_type == "snapshot":
+                    execution_result = await self._executor.submit(job)
+                    if execution_result.snapshot is None:
+                        raise RuntimeError(
+                            "Snapshot execution returned no snapshot result"
+                        )
+                    result = execution_result.snapshot
+                else:
+                    raise ValueError(
+                        f"Unsupported simulation type: {job.simulation_type}"
                     )
             except Exception as exc:
                 session.status = SimulationStatus.ERROR
@@ -177,7 +233,12 @@ class SimulationService:
                     },
                 )
                 raise
-            session.task_count += 1
+
+            execution_info = await self._executor.session_info(session.session_id)
+            session.task_count = execution_info.task_count
+            session.model_summary = execution_info.model_summary
+            session.runtime_identity = execution_info.runtime_identity
+            session.load_multiplier = execution_info.load_multiplier
             session.last_result = result
             if isinstance(result, SolveResponse):
                 metrics.increment("snapshot_runs")
@@ -209,23 +270,6 @@ class SimulationService:
             session.status = SimulationStatus.COMPLETED
             await self.broadcast(session, "completed")
 
-            if session.task_count >= RECYCLE_THRESHOLD:
-                old_engine = session.engine
-                await self._executor.close(old_engine)
-                session.engine = await self._executor.create_engine(
-                    resolve_topology(session.topology),
-                    (
-                        result.load_multiplier
-                        if isinstance(result, SolveResponse)
-                        else result.steps[-1].load_multiplier
-                    ),
-                )
-                session.model_summary = self._executor.model_summary(
-                    session.engine,
-                    session.topology,
-                )
-                session.task_count = 0
-
         logger.info(
             "simulation_solved session_id=%s topology=%s elapsed_ms=%.3f converged=%s",
             session_id,
@@ -236,6 +280,7 @@ class SimulationService:
             else result.failed_steps == 0,
         )
         return result
+
     async def list_sessions(self) -> list[SimulationSummary]:
         return [
             SimulationSummary(
@@ -247,6 +292,7 @@ class SimulationService:
             )
             for session in self._sessions.values()
         ]
+
 
     def get_detail(self, session_id: str) -> SimulationDetail:
         session = self._get_session(session_id)
@@ -265,54 +311,10 @@ class SimulationService:
             progress_pct=session.progress_pct,
             simulated_hour=session.simulated_hour,
             last_qsts_step=session.last_qsts_step,
-            worker_identity=session.engine.identity,
+            worker_identity=session.runtime_identity,
         )
 
-    def _qsts_progress_callback(
-        self, session: SimulationSession, loop: asyncio.AbstractEventLoop
-    ):
-        def callback(step: QSTSStepResult, current_step: int, total_steps: int) -> None:
-            future = asyncio.run_coroutine_threadsafe(
-                self._publish_qsts_progress(
-                    session, step, current_step, total_steps
-                ),
-                loop,
-            )
-            future.result()
-
-        return callback
-
-    async def _publish_qsts_progress(
-        self,
-        session: SimulationSession,
-        step: QSTSStepResult,
-        current_step: int,
-        total_steps: int,
-    ) -> None:
-        session.current_step = current_step
-        session.total_steps = total_steps
-        session.progress_pct = round(current_step * 100.0 / total_steps, 3)
-        session.simulated_hour = step.simulated_hour
-        session.last_qsts_step = step
-        await self.broadcast(
-            session,
-            "qsts_progress",
-            {
-                "simulation_type": "qsts",
-                "step": step.step,
-                "total_steps": total_steps,
-                "progress_pct": session.progress_pct,
-                "simulated_minutes": step.simulated_minutes,
-                "simulated_hour": step.simulated_hour,
-                "converged": step.converged,
-                "solve_ms": step.solve_ms,
-                "load_multiplier": step.load_multiplier,
-                "total_kw": step.total_kw,
-                "total_kvar": step.total_kvar,
-                "min_voltage_pu": step.min_voltage_pu,
-                "max_voltage_pu": step.max_voltage_pu,
-            },
-        )
+    
 
     @staticmethod
     def _qsts_summary(result: QSTSResult) -> dict:
@@ -348,14 +350,34 @@ class SimulationService:
 
     async def close(self, session_id: str) -> None:
         session = self._get_session(session_id)
+        session = self._get_session(
+            session_id
+        )   
+
         async with session.lock:
-            session.status = SimulationStatus.CLOSED
-            await self._executor.close(session.engine)
-            await self.broadcast(
-                session, "completed", {"status": SimulationStatus.CLOSED.value}
+            session.status = (
+                SimulationStatus.CLOSED
             )
+
+            await self._executor.close_session(
+                session.session_id
+            )
+
+            await self.broadcast(
+                session,
+                "completed",
+                {
+                    "status":
+                        SimulationStatus.CLOSED.value
+                },
+            )
+
             async with self._registry_lock:
-                self._sessions.pop(session_id, None)
+                self._sessions.pop(
+                    session_id,
+                    None,
+                )
+
         session.subscribers.clear()
 
     async def subscribe(self, session_id: str, websocket: WebSocket) -> None:
@@ -421,14 +443,23 @@ class SimulationService:
             )
         return session
 
-    def get_engine_identity(self, session_id: str) -> int:
-        """Testing hook: proves two sessions do not share one Python context object."""
-        session = self._get_session(session_id)
-        return self._executor.identity(session.engine)
+    async def session_engine_identity(
+        self,
+        session_id: str,
+    ) -> int | str | None:
+        return self._get_session(session_id).runtime_identity
+
+    async def session_load_multiplier(
+        self,
+        session_id: str,
+    ) -> float:
+        return self._get_session(session_id).load_multiplier
+
+    def get_engine_identity(self, session_id: str) -> int | str | None:
+        return self._get_session(session_id).runtime_identity
 
     def get_load_multiplier(self, session_id: str) -> float:
-        session = self._get_session(session_id)
-        return self._executor.load_multiplier(session.engine)
+        return self._get_session(session_id).load_multiplier
 
     def metrics_snapshot(self) -> dict[str, int]:
         statuses = [session.status for session in self._sessions.values()]
@@ -438,3 +469,80 @@ class SimulationService:
             "completed": sum(status.value == "COMPLETED" for status in statuses),
             "error": sum(status.value == "ERROR" for status in statuses),
         }
+    async def _handle_executor_progress(
+        self,
+        session: SimulationSession,
+        progress: SimulationProgress,
+    ) -> None:
+        session.current_step = (
+            progress.step or 0
+        )
+
+        session.total_steps = (
+            progress.total_steps or 0
+        )
+
+        session.progress_pct = (
+            progress.progress_pct
+        )
+
+        session.simulated_hour = (
+            progress.simulated_hour
+        )
+
+        required = (
+            progress.step,
+            progress.simulated_minutes,
+            progress.simulated_hour,
+            progress.converged,
+            progress.solve_ms,
+            progress.load_multiplier,
+        )
+        if any(value is None for value in required):
+            raise RuntimeError("QSTS progress is missing required fields")
+
+        session.last_qsts_step = QSTSStepResult(
+            step=progress.step,
+            simulated_minutes=progress.simulated_minutes,
+            simulated_hour=progress.simulated_hour,
+            opendss_hour=progress.opendss_hour,
+            opendss_time_of_step_us=(
+                progress.opendss_time_of_step_us
+            ),
+            converged=progress.converged,
+            solve_ms=progress.solve_ms,
+            load_multiplier=progress.load_multiplier,
+            total_kw=progress.total_kw,
+            total_kvar=progress.total_kvar,
+            min_voltage_pu=progress.min_voltage_pu,
+            max_voltage_pu=progress.max_voltage_pu,
+            solution_iterations=(
+                progress.solution_iterations
+            ),
+            rss_mb=progress.rss_mb,
+        )
+
+        await self.broadcast(
+            session,
+            "qsts_progress",
+            {
+                "step": progress.step,
+                "total_steps": progress.total_steps,
+                "progress_pct": progress.progress_pct,
+                "simulated_minutes": progress.simulated_minutes,
+                "simulated_hour": progress.simulated_hour,
+                "converged": progress.converged,
+                "solve_ms": progress.solve_ms,
+                "load_multiplier": progress.load_multiplier,
+                "total_kw": progress.total_kw,
+                "total_kvar": progress.total_kvar,
+                "min_voltage_pu": progress.min_voltage_pu,
+                "max_voltage_pu": progress.max_voltage_pu,
+                "opendss_hour": progress.opendss_hour,
+                "opendss_time_of_step_us": (
+                    progress.opendss_time_of_step_us
+                ),
+                "solution_iterations": progress.solution_iterations,
+                "rss_mb": progress.rss_mb,
+            },
+        )

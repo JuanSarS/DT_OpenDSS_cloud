@@ -7,10 +7,10 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.adapters.opendss.engine import OpenDSSContextEngine
 from app.domain.models import QSTSResult
-from app.orchestration import simulation_service as service_module
-from app.orchestration.container import simulation_service
-
-
+from app.orchestration.container import (
+    simulation_executor,
+    simulation_service,
+)
 def test_registry_openapi_last_result_and_close() -> None:
    
     with TestClient(app) as client:
@@ -74,7 +74,11 @@ def test_websocket_snapshot_and_broadcast() -> None:
 
 
 def test_recycle_preserves_session_id(monkeypatch) -> None:
-    monkeypatch.setattr(service_module, "RECYCLE_THRESHOLD", 1)
+    monkeypatch.setattr(
+        simulation_executor,
+        "_recycle_threshold",
+        1,
+    )   
     with TestClient(app) as client:
         session_id = client.post(
             "/simulations", json={"topology": "ieee13"}

@@ -10,6 +10,7 @@ services:
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
+      EXECUTION_BACKEND: ${EXECUTION_BACKEND:-local}
       CUSTOM_MODELS_DIR: /app/data/runtime/custom_models
     volumes:
       - custom-models:/app/data/runtime/custom_models

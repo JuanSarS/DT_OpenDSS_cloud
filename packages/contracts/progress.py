@@ -69,6 +69,20 @@ class SimulationProgress(BaseModel):
     min_voltage_pu: float | None = None
     max_voltage_pu: float | None = None
 
+    opendss_hour: float | None = None
+
+    opendss_time_of_step_us: float | None = None
+
+    solution_iterations: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    rss_mb: float | None = Field(
+        default=None,
+        ge=0.0,
+    )
+    
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )

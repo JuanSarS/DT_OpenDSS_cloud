@@ -1,4 +1,15 @@
-from app.orchestration.simulation_service import SimulationService
+from app.orchestration.simulation_service import (
+    SimulationService,
+)
+from services.api_manager.execution.factory import (
+    build_simulation_executor,
+)
 
-# Week 4: in-memory registry. Persistence/lifecycle/recycling comes later.
-simulation_service = SimulationService()
+
+simulation_executor = (
+    build_simulation_executor()
+)
+
+simulation_service = SimulationService(
+    executor=simulation_executor
+)
