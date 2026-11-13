@@ -1,4 +1,4 @@
-from services.api_manager.execution.base import (
+from packages.contracts.execution  import (
     SimulationExecutor,
 )
 from services.api_manager.execution.local_executor import (

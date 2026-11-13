@@ -17,6 +17,13 @@ class Settings(BaseModel):
     allow_custom_models: bool = True
     custom_models_dir: Path = Path("data/runtime/custom_models")
     cors_origins: str = ""
+    simulation_worker_url: str = (
+    "http://127.0.0.1:8100"
+    )
+
+    simulation_worker_timeout_seconds: float = (
+        600.0
+    )
     def __init__(self, **values: object) -> None:
         defaults = {
             "app_host": "0.0.0.0",
@@ -30,6 +37,8 @@ class Settings(BaseModel):
             "allow_custom_models": True,
             "custom_models_dir": Path("data/runtime/custom_models"),
             "cors_origins": "",
+            "simulation_worker_url": "http://127.0.0.1:8100",
+            "simulation_worker_timeout_seconds": 600.0,
         }
         names = {
             "app_host": "APP_HOST", "app_port": "APP_PORT", "log_level": "LOG_LEVEL",
@@ -38,6 +47,8 @@ class Settings(BaseModel):
             "execution_backend": "EXECUTION_BACKEND",
             "allow_custom_models": "ALLOW_CUSTOM_MODELS", "custom_models_dir": "CUSTOM_MODELS_DIR",
             "cors_origins": "CORS_ORIGINS",
+            "simulation_worker_url": "SIMULATION_WORKER_URL",
+            "simulation_worker_timeout_seconds": "SIMULATION_WORKER_TIMEOUT_SECONDS",
         }
         for field_name, env_name in names.items():
             if env_name in os.environ:

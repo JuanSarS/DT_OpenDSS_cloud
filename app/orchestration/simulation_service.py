@@ -28,7 +28,7 @@ from packages.contracts.jobs import (
 from packages.contracts.progress import (
     SimulationProgress,
 )
-from services.api_manager.execution.base import (
+from packages.contracts.execution import (
     SimulationExecutor,
 )
 from app.platform.settings import get_settings
