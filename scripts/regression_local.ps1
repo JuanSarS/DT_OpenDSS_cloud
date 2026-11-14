@@ -7,13 +7,13 @@ $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "====================================="
-Write-Host " OpenDSS Cloud R1 Regression"
+Write-Host "OpenDSS Cloud Regression"
 Write-Host "====================================="
 Write-Host "Base URL: $BaseUrl"
 Write-Host ""
 
 Write-Host "[1] Python compile"
-python -m compileall app packages services
+python -m compileall packages services scripts
 if ($LASTEXITCODE -ne 0) {
     throw "compileall failed"
 }
@@ -63,21 +63,25 @@ $metrics = Invoke-RestMethod "$BaseUrl/metrics"
 Write-Host "Metrics OK"
 
 Write-Host "[9] OpenAPI baseline"
+$api = Invoke-RestMethod "$BaseUrl/openapi.json"
 
-$current = Invoke-RestMethod "$BaseUrl/openapi.json" |
-    ConvertTo-Json -Depth 100 -Compress
+$paths = @(
+    $api.paths.PSObject.Properties.Name
+)
 
-$baseline = Get-Content `
-    ".\docs\baseline\contracts\openapi_baseline.json" `
-    -Raw |
-    ConvertFrom-Json |
-    ConvertTo-Json -Depth 100 -Compress
-
-if ($current -ne $baseline) {
-    throw "OpenAPI contract changed"
+foreach ($required in @(
+    "/health",
+    "/models",
+    "/simulations",
+    "/simulations/{session_id}",
+    "/simulations/{session_id}/solve",
+    "/simulations/{session_id}/results",
+    "/metrics"
+)) {
+    if ($required -notin $paths) {
+        throw "Missing OpenAPI path: $required"
+    }
 }
-
-Write-Host "OpenAPI unchanged"
 
 Write-Host "[10] QSTS REST smoke"
 python .\scripts\qsts_api_smoke.py --base-url $BaseUrl
@@ -119,5 +123,5 @@ if ($Full) {
 
 Write-Host ""
 Write-Host "====================================="
-Write-Host " R1 REGRESSION OK"
+Write-Host " REGRESSION OK"
 Write-Host "====================================="

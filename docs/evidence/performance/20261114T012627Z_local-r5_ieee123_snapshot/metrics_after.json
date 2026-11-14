@@ -1,0 +1,102 @@
+{
+  "timestamp": 1794619597.632082,
+  "started_at": 1794618343.671364,
+  "process": {
+    "pid": 1,
+    "rss_mb": 89.75,
+    "cpu_percent": 36.7,
+    "threads": 5
+  },
+  "sessions": {
+    "active": 0,
+    "running": 0,
+    "completed": 0,
+    "error": 0
+  },
+  "rest": {
+    "session_create_ms": {
+      "count": 30,
+      "mean": 118.362,
+      "min": 40.675,
+      "p50": 78.185,
+      "p95": 297.621,
+      "p99": 596.269,
+      "max": 715.563
+    },
+    "snapshot_request_ms": {
+      "count": 25,
+      "mean": 212.254,
+      "min": 124.501,
+      "p50": 165.937,
+      "p95": 325.875,
+      "p99": 918.5,
+      "max": 1101.477
+    },
+    "qsts_request_ms": {
+      "count": 8,
+      "mean": 297.701,
+      "min": 104.956,
+      "p50": 204.738,
+      "p95": 697.485,
+      "p99": 785.479,
+      "max": 807.477
+    },
+    "get_results_ms": {
+      "count": 29,
+      "mean": 2.08,
+      "min": 0.058,
+      "p50": 0.962,
+      "p95": 1.646,
+      "p99": 27.078,
+      "max": 36.932
+    }
+  },
+  "snapshot": {
+    "solve_count": 25,
+    "solve": {
+      "count": 25,
+      "mean": 9.995,
+      "min": 0.147,
+      "p50": 2.996,
+      "p95": 8.724,
+      "p99": 133.485,
+      "max": 172.689
+    }
+  },
+  "qsts": {
+    "runs": 8,
+    "total_steps": 603,
+    "elapsed": {
+      "count": 8,
+      "mean": 173.137,
+      "min": 4.358,
+      "p50": 50.886,
+      "p95": 563.69,
+      "p99": 649.571,
+      "max": 671.041
+    },
+    "step": {
+      "count": 603,
+      "mean": 0.827,
+      "min": 0.138,
+      "p50": 0.235,
+      "p95": 0.922,
+      "p99": 24.425,
+      "max": 34.673
+    }
+  },
+  "counters": {
+    "snapshot_runs": 25,
+    "qsts_runs": 8,
+    "qsts_total_steps": 603
+  },
+  "sample_count": {
+    "session_create_ms": 30,
+    "snapshot_solve_ms": 25,
+    "snapshot_request_ms": 25,
+    "qsts_elapsed_ms": 8,
+    "qsts_step_ms": 603,
+    "qsts_request_ms": 8,
+    "get_results_ms": 29
+  }
+}
