@@ -39,6 +39,21 @@ def build_simulation_executor(
             ),
         )
 
+    if backend == "worker_pool":
+        from services.api_manager.execution.worker_pool import (
+            WorkerPoolSimulationExecutor,
+        )
+
+        endpoints = [
+            item.strip()
+            for item in settings.simulation_worker_urls.split(",")
+            if item.strip()
+        ] or [settings.simulation_worker_url]
+        return WorkerPoolSimulationExecutor(
+            endpoints,
+            timeout_seconds=settings.simulation_worker_timeout_seconds,
+        )
+
     raise RuntimeError(
         "Unsupported execution backend: "
         f"{settings.execution_backend}"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from packages.contracts.models import ModelSummary
@@ -17,6 +18,7 @@ from packages.contracts.execution  import (
 from services.simulation_worker.topology_resolver import (
     resolve_worker_topology,
 )
+from services.simulation_worker.settings import worker_settings
 class LocalJobCancelled(Exception):
     """Internal cooperative cancellation signal."""
 
@@ -304,6 +306,10 @@ class LocalSimulationExecutor:
                     loop,
                 )
                 future.result()
+            if worker_settings.test_progress_delay_ms > 0:
+                time.sleep(
+                    worker_settings.test_progress_delay_ms / 1000.0
+                )
 
         qsts_result = await asyncio.to_thread(
             runtime.engine.solve_qsts,

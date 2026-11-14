@@ -1,0 +1,10 @@
+services:
+  simulation-worker-1:
+    environment:
+      WORKER_TEST_PROGRESS_DELAY_MS: ${WORKER_TEST_PROGRESS_DELAY_MS:-250}
+  simulation-worker-2:
+    environment:
+      WORKER_TEST_PROGRESS_DELAY_MS: ${WORKER_TEST_PROGRESS_DELAY_MS:-250}
+  simulation-worker-3:
+    environment:
+      WORKER_TEST_PROGRESS_DELAY_MS: ${WORKER_TEST_PROGRESS_DELAY_MS:-250}

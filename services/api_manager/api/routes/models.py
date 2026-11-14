@@ -51,7 +51,7 @@ async def upload_model(
 
 
 @router.get("/custom/{model_id}")
-async def custom_model(model_id: str) -> dict:
+async def custom_model(model_id: str, _: AdminUser) -> dict:
     try:
         metadata = custom_model_manager.metadata(model_id)
         metadata["files"] = custom_model_manager.list_files(model_id)

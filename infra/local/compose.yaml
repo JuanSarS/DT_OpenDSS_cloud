@@ -1,69 +1,68 @@
 name: opendss-lab
 
+x-worker: &worker
+  build:
+    context: ../..
+    dockerfile: services/simulation_worker/Dockerfile
+  restart: unless-stopped
+  secrets:
+    - worker-token
+  environment:
+    WORKER_HOST: 0.0.0.0
+    WORKER_PORT: 8100
+    RECYCLE_THRESHOLD: ${RECYCLE_THRESHOLD:-162}
+    CUSTOM_MODELS_DIR: /app/data/runtime/custom_models
+    WORKER_SHARED_TOKEN_FILE: /run/secrets/worker-token
+    WORKER_TEST_PROGRESS_DELAY_MS: ${WORKER_TEST_PROGRESS_DELAY_MS:-0}
+  volumes:
+    - custom-models:/app/data/runtime/custom_models
+  expose:
+    - "8100"
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "python",
+        "-c",
+        "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/internal/health')"
+      ]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
 services:
   gateway:
     image: caddy:2
     restart: unless-stopped
-
     depends_on:
       api-manager:
         condition: service_healthy
-
     ports:
       - "${HTTPS_PORT:-8443}:443"
-
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-  simulation-worker:
-    build:
-      context: ../..
-      dockerfile: services/simulation_worker/Dockerfile
 
-    restart: unless-stopped
-    secrets:
-     - worker-token
-    environment:
-      WORKER_HOST: 0.0.0.0
-      WORKER_PORT: 8100
-      RECYCLE_THRESHOLD: ${RECYCLE_THRESHOLD:-162}
-      CUSTOM_MODELS_DIR: /app/data/runtime/custom_models
-      WORKER_SHARED_TOKEN_FILE: /run/secrets/worker-token
-
-    volumes:
-      - custom-models:/app/data/runtime/custom_models
-
-    expose:
-      - "8100"
-
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/internal/health')"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
+  simulation-worker-1: *worker
+  simulation-worker-2: *worker
+  simulation-worker-3: *worker
 
   api-manager:
     build:
       context: ../..
       dockerfile: services/api_manager/Dockerfile
-
     restart: unless-stopped
-
     depends_on:
-      simulation-worker:
+      simulation-worker-1:
         condition: service_healthy
-
+      simulation-worker-2:
+        condition: service_healthy
+      simulation-worker-3:
+        condition: service_healthy
     expose:
-    - "8000"
+      - "8000"
     env_file:
       - path: ../../.env
         required: false
@@ -71,30 +70,22 @@ services:
       - jwt-secret
       - auth-users
       - worker-token
-
-
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
-
-      EXECUTION_BACKEND: worker_http
-      SIMULATION_WORKER_URL: http://simulation-worker:8100
+      EXECUTION_BACKEND: worker_pool
+      SIMULATION_WORKER_URLS: http://simulation-worker-1:8100,http://simulation-worker-2:8100,http://simulation-worker-3:8100
       SIMULATION_WORKER_TIMEOUT_SECONDS: ${SIMULATION_WORKER_TIMEOUT_SECONDS:-600}
-
       MAX_ACTIVE_SIMULATIONS: ${MAX_ACTIVE_SIMULATIONS:-32}
-
       ALLOW_CUSTOM_MODELS: ${ALLOW_CUSTOM_MODELS:-true}
       CUSTOM_MODELS_DIR: /app/data/runtime/custom_models
-
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
-
       JWT_SECRET_FILE: /run/secrets/jwt-secret
       AUTH_USERS_JSON_FILE: /run/secrets/auth-users
       WORKER_SHARED_TOKEN_FILE: /run/secrets/worker-token
     volumes:
       - custom-models:/app/data/runtime/custom_models
-
     healthcheck:
       test:
         [
@@ -111,12 +102,11 @@ services:
 secrets:
   jwt-secret:
     file: ../../secrets/local/jwt_secret.txt
-
   auth-users:
     file: ../../secrets/local/auth_users.json
-
   worker-token:
     file: ../../secrets/local/worker_shared_token.txt
+
 volumes:
   custom-models:
   caddy-data:

@@ -1,6 +1,7 @@
 import time
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from pydantic import BaseModel
 
 from packages.contracts.errors import (
     AccessDeniedError,
@@ -25,15 +26,22 @@ from services.api_manager.auth.dependencies import (
     CurrentUser,
     get_user_from_token,
 )
+from services.api_manager.auth.users import load_users
 from services.api_manager.orchestration.container import simulation_service
 from services.api_manager.platform.metrics import metrics
 from services.api_manager.security.events import (
     SecurityEvent,
     record_security_event,
 )
+from services.api_manager.platform.settings import settings
+from services.api_manager.security.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 websocket_router = APIRouter(prefix="/ws/simulations", tags=["simulations"])
+
+
+class ViewerRequest(BaseModel):
+    username: str
 
 
 @router.post("", response_model=CreateSimulationResponse, status_code=status.HTTP_201_CREATED)
@@ -53,6 +61,62 @@ async def list_simulations(current_user: CurrentUser) -> list[SimulationSummary]
         current_user.username,
         current_user.role == "admin",
     )
+
+
+@router.get("/{session_id}/viewers")
+async def list_viewers(session_id: str, current_user: CurrentUser) -> list[str]:
+    try:
+        return simulation_service.list_viewers(
+            session_id,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
+        )
+    except SimulationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.post("/{session_id}/viewers")
+async def add_viewer(
+    session_id: str,
+    request: ViewerRequest,
+    current_user: CurrentUser,
+) -> list[str]:
+    if request.username not in load_users():
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    try:
+        return simulation_service.add_viewer(
+            session_id,
+            request.username,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
+        )
+    except SimulationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/{session_id}/viewers/{username}")
+async def remove_viewer(
+    session_id: str,
+    username: str,
+    current_user: CurrentUser,
+) -> list[str]:
+    try:
+        return simulation_service.remove_viewer(
+            session_id,
+            username,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
+        )
+    except SimulationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @router.get("/{session_id}", response_model=SimulationDetail)
@@ -181,6 +245,22 @@ async def solve_simulation(
 @websocket_router.websocket("/{session_id}")
 async def simulation_websocket(websocket: WebSocket, session_id: str) -> None:
     try:
+        if settings.rate_limit_enabled:
+            client_ip = websocket.client.host if websocket.client else "unknown"
+            retry_after = rate_limiter.check(
+                f"ws:{client_ip}",
+                settings.rate_limit_requests,
+                settings.rate_limit_window_seconds,
+            )
+            if retry_after is not None:
+                record_security_event(
+                    SecurityEvent.RATE_LIMITED.value,
+                    client_ip=client_ip,
+                    path=f"/ws/simulations/{session_id}",
+                    status_code=429,
+                )
+                await websocket.close(code=1013)
+                return
         token = None
         protocols = [item.strip() for item in websocket.headers.get("sec-websocket-protocol", "").split(",")]
         if "opendss.jwt" in protocols:

@@ -47,6 +47,7 @@ class SimulationSummary(BaseModel):
     status: SimulationStatus
     created_at: datetime
     task_count: int
+    access_mode: Literal["owner", "viewer", "admin"] = "owner"
 
 
 class SimulationDetail(SimulationSummary):

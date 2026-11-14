@@ -9,6 +9,7 @@ class WorkerSettings:
     host: str
     port: int
     recycle_threshold: int
+    test_progress_delay_ms: int
 
 
 worker_settings = WorkerSettings(
@@ -27,5 +28,8 @@ worker_settings = WorkerSettings(
             "RECYCLE_THRESHOLD",
             "162",
         )
+    ),
+    test_progress_delay_ms=int(
+        os.getenv("WORKER_TEST_PROGRESS_DELAY_MS", "0")
     ),
 )

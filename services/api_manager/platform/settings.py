@@ -20,6 +20,7 @@ class Settings(BaseModel):
     simulation_worker_url: str = (
     "http://127.0.0.1:8100"
     )
+    simulation_worker_urls: str = ""
 
     simulation_worker_timeout_seconds: float = (
         600.0
@@ -59,6 +60,7 @@ class Settings(BaseModel):
             "custom_models_dir": Path("data/runtime/custom_models"),
             "cors_origins": "",
             "simulation_worker_url": "http://127.0.0.1:8100",
+            "simulation_worker_urls": "",
             "simulation_worker_timeout_seconds": 600.0,
             "jwt_expire_minutes": 30,
             "jwt_issuer": "opendss-cloud",
@@ -86,6 +88,7 @@ class Settings(BaseModel):
             "allow_custom_models": "ALLOW_CUSTOM_MODELS", "custom_models_dir": "CUSTOM_MODELS_DIR",
             "cors_origins": "CORS_ORIGINS",
             "simulation_worker_url": "SIMULATION_WORKER_URL",
+            "simulation_worker_urls": "SIMULATION_WORKER_URLS",
             "simulation_worker_timeout_seconds": "SIMULATION_WORKER_TIMEOUT_SECONDS",
             "jwt_expire_minutes": "JWT_EXPIRE_MINUTES", "jwt_issuer": "JWT_ISSUER", "jwt_audience": "JWT_AUDIENCE",
             "auth_enabled": "AUTH_ENABLED",

@@ -1,0 +1,5 @@
+services:
+  api-manager:
+    environment:
+      RATE_LIMIT_ENABLED: "false"
+      ADMISSION_CONTROL_ENABLED: "false"

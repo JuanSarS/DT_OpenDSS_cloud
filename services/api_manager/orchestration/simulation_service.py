@@ -57,6 +57,7 @@ class SimulationSession:
     lock: asyncio.Lock
     model_summary: ModelSummary
     owner_id: str
+    viewer_ids: set[str] = field(default_factory=set)
     runtime_identity: int | str | None = None
     load_multiplier: float = 1.0
     status: SimulationStatus = SimulationStatus.CREATED
@@ -150,7 +151,7 @@ class SimulationService:
             raise SimulationNotFoundError(
                 f"No existe una simulación con session_id={session_id}"
             )
-        self._authorize_session(session_id, user_id, is_admin)
+        self._authorize_session(session_id, user_id, is_admin, control=True)
 
         # Never execute two solves simultaneously against the same context.
         # Different sessions still run concurrently because each has its own lock
@@ -178,7 +179,9 @@ class SimulationService:
                         raise OverloadedError(
                             "Se alcanzó la capacidad global de jobs"
                         )
-            session.status = SimulationStatus.RUNNING
+                    session.status = SimulationStatus.RUNNING
+            else:
+                session.status = SimulationStatus.RUNNING
             session.last_error = None
             request = request or SolveRequest()
             session.simulation_type = request.simulation_type
@@ -325,17 +328,20 @@ class SimulationService:
         user_id: str | None = None,
         is_admin: bool = True,
     ) -> list[SimulationSummary]:
-        return [
-            SimulationSummary(
+        result = []
+        for session in self._sessions.values():
+            access_mode = self._access_mode(session, user_id, is_admin)
+            if access_mode is None:
+                continue
+            result.append(SimulationSummary(
                 session_id=session.session_id,
                 topology=session.topology,
                 status=session.status,
                 created_at=session.created_at,
                 task_count=session.task_count,
-            )
-            for session in self._sessions.values()
-            if is_admin or session.owner_id == user_id
-        ]
+                access_mode=access_mode,
+            ))
+        return result
 
 
     def get_detail(
@@ -346,7 +352,7 @@ class SimulationService:
         is_admin: bool = True,
     ) -> SimulationDetail:
         session = self._get_session(session_id)
-        self._authorize_session(session_id, user_id, is_admin)
+        self._authorize_session(session_id, user_id, is_admin, control=False)
         return SimulationDetail(
             session_id=session.session_id,
             topology=session.topology,
@@ -363,6 +369,7 @@ class SimulationService:
             simulated_hour=session.simulated_hour,
             last_qsts_step=session.last_qsts_step,
             worker_identity=session.runtime_identity,
+            access_mode=self._access_mode(session, user_id, is_admin) or "owner",
         )
 
     
@@ -383,7 +390,7 @@ class SimulationService:
         is_admin: bool = True,
     ) -> dict:
         session = self._get_session(session_id)
-        self._authorize_session(session_id, user_id, is_admin)
+        self._authorize_session(session_id, user_id, is_admin, control=False)
         if session.last_result is None:
             raise LookupError("La simulación todavía no tiene resultados")
         if isinstance(session.last_result, QSTSResult):
@@ -414,7 +421,7 @@ class SimulationService:
         is_admin: bool = True,
     ) -> None:
         session = self._get_session(session_id)
-        self._authorize_session(session_id, user_id, is_admin)
+        self._authorize_session(session_id, user_id, is_admin, control=True)
      
         async with session.lock:
             session.status = (
@@ -452,7 +459,7 @@ class SimulationService:
         subprotocol: str | None = None,
     ) -> None:
         session = self._get_session(session_id)
-        self._authorize_session(session_id, user_id, is_admin)
+        self._authorize_session(session_id, user_id, is_admin, control=False)
         await websocket.accept(subprotocol=subprotocol)
         session.subscribers.add(websocket)
         await websocket.send_json(
@@ -476,6 +483,9 @@ class SimulationService:
                     status=session.status,
                     created_at=session.created_at,
                     task_count=session.task_count,
+                    access_mode=self._access_mode(
+                        session, user_id, is_admin
+                    ) or "viewer",
                 ).model_dump(mode="json"),
                 "model": session.model_summary.model_dump(),
                 "last_result": session.last_result.model_dump() if session.last_result else None,
@@ -514,19 +524,76 @@ class SimulationService:
             )
         return session
 
+    def _access_mode(
+        self,
+        session: SimulationSession,
+        user_id: str | None,
+        is_admin: bool,
+    ) -> str | None:
+        if is_admin:
+            return "admin"
+        if user_id == session.owner_id:
+            return "owner"
+        if user_id in session.viewer_ids:
+            return "viewer"
+        return None
+
     def _authorize_session(
         self,
         session_id: str,
         user_id: str | None,
         is_admin: bool,
+        *,
+        control: bool,
     ) -> None:
-        if is_admin:
-            return
         session = self._get_session(session_id)
-        if user_id is None or session.owner_id != user_id:
+        mode = self._access_mode(session, user_id, is_admin)
+        if mode is None or (control and mode == "viewer"):
             raise AccessDeniedError(
                 f"El usuario no tiene acceso a la simulación {session_id}"
             )
+
+    def list_viewers(
+        self,
+        session_id: str,
+        *,
+        user_id: str,
+        is_admin: bool,
+    ) -> list[str]:
+        session = self._get_session(session_id)
+        if not is_admin and session.owner_id != user_id:
+            raise AccessDeniedError("Solo el propietario puede gestionar viewers")
+        return sorted(session.viewer_ids)
+
+    def add_viewer(
+        self,
+        session_id: str,
+        username: str,
+        *,
+        user_id: str,
+        is_admin: bool,
+    ) -> list[str]:
+        session = self._get_session(session_id)
+        if not is_admin and session.owner_id != user_id:
+            raise AccessDeniedError("Solo el propietario puede gestionar viewers")
+        if username == session.owner_id:
+            raise ValueError("El propietario no puede agregarse como viewer")
+        session.viewer_ids.add(username)
+        return sorted(session.viewer_ids)
+
+    def remove_viewer(
+        self,
+        session_id: str,
+        username: str,
+        *,
+        user_id: str,
+        is_admin: bool,
+    ) -> list[str]:
+        session = self._get_session(session_id)
+        if not is_admin and session.owner_id != user_id:
+            raise AccessDeniedError("Solo el propietario puede gestionar viewers")
+        session.viewer_ids.discard(username)
+        return sorted(session.viewer_ids)
 
     async def session_engine_identity(
         self,
@@ -546,14 +613,18 @@ class SimulationService:
     def get_load_multiplier(self, session_id: str) -> float:
         return self._get_session(session_id).load_multiplier
 
-    def metrics_snapshot(self) -> dict[str, int]:
+    def metrics_snapshot(self) -> dict[str, object]:
         statuses = [session.status for session in self._sessions.values()]
-        return {
+        result: dict[str, object] = {
             "active": len(statuses),
             "running": sum(status.value == "RUNNING" for status in statuses),
             "completed": sum(status.value == "COMPLETED" for status in statuses),
             "error": sum(status.value == "ERROR" for status in statuses),
         }
+        pool_metrics = getattr(self._executor, "metrics_snapshot", None)
+        if pool_metrics is not None:
+            result.update(pool_metrics())
+        return result
     async def _handle_executor_progress(
         self,
         session: SimulationSession,
