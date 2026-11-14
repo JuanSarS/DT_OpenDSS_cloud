@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.main import app
+from services.api_manager.main import app
 
 
 @pytest.mark.anyio

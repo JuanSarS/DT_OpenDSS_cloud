@@ -3,8 +3,8 @@ import asyncio
 import httpx
 import pytest
 
-from app.main import app
-from app.orchestration.container import simulation_service
+from services.api_manager.main import app
+from services.api_manager.orchestration.container import simulation_service
 
 
 @pytest.mark.anyio

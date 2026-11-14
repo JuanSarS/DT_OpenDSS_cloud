@@ -1,21 +1,43 @@
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-FRONTEND_ROOT = PROJECT_ROOT / "services" / "frontend"
+PROJECT_ROOT = (
+    Path(__file__).resolve()
+    .parents[2]
+)
 
+FRONTEND_ROOT = (
+    PROJECT_ROOT
+    / "services"
+    / "frontend"
+)
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes.health import router as health_router
-from app.api.routes.metrics import router as metrics_router
-from app.api.routes.models import router as models_router
-from app.api.routes.simulations import router as simulations_router
-from app.api.routes.simulations import websocket_router
-from app.platform.logging_config import configure_logging
-from app.platform.settings import get_settings
+from services.api_manager.api.routes.health import (
+    router as health_router,
+)
+from services.api_manager.api.routes.metrics import (
+    router as metrics_router,
+)
+from services.api_manager.api.routes.models import (
+    router as models_router,
+)
+from services.api_manager.api.routes.simulations import (
+    router as simulations_router,
+)
+from services.api_manager.api.routes.simulations import (
+    websocket_router,
+)
+
+from services.api_manager.platform.logging_config import (
+    configure_logging,
+)
+from services.api_manager.platform.settings import (
+    get_settings,
+)
 
 configure_logging()
 

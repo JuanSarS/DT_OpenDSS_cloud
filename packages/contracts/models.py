@@ -59,7 +59,7 @@ class SimulationDetail(SimulationSummary):
     progress_pct: float | None = None
     simulated_hour: float | None = None
     last_qsts_step: "QSTSStepResult | None" = None
-    worker_identity: int
+    worker_identity: int | str | None = None
 
 
 class ComplexValue(BaseModel):

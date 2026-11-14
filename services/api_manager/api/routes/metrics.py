@@ -1,8 +1,11 @@
 from fastapi import APIRouter
 
-from app.orchestration.container import simulation_service
-from app.platform.metrics import metrics
-
+from services.api_manager.orchestration.container import (
+    simulation_service,
+)
+from services.api_manager.platform.metrics import (
+    metrics,
+)
 router = APIRouter(tags=["metrics"])
 
 

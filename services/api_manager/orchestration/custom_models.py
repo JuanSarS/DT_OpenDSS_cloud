@@ -8,8 +8,8 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
-from app.adapters.opendss.engine import OpenDSSContextEngine
-from app.platform.settings import get_settings
+
+from services.api_manager.platform.settings  import get_settings
 
 ALLOWED_EXTENSIONS = {".dss", ".csv", ".txt", ".dat", ".dbl", ".json"}
 
@@ -104,16 +104,7 @@ class CustomModelManager:
             raise CustomModelError("Master DSS inválido")
         return target
 
-    def validate(self, model_id: str, master: str) -> dict:
-        path = self.master_path(model_id, master)
-        try:
-            engine = OpenDSSContextEngine(path)
-            summary = engine.model_summary(f"custom:{model_id}")
-            engine.close()
-            return {"valid": True, "model_id": model_id, "master": master, "model": summary.model_dump()}
-        except Exception as exc:
-            return {"valid": False, "model_id": model_id, "master": master, "message": str(exc)}
-
+  
     def list_files(self, model_id: str) -> list[str]:
         workspace = self._workspace(model_id)
         return [str(path.relative_to(workspace)) for path in workspace.rglob("*.dss")]

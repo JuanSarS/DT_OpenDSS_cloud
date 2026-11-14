@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from app.adapters.opendss.engine import OpenDSSContextEngine
-from app.domain.models import QSTSConfig
-from app.domain.qsts_profiles import synthetic_mixed_daily_profile
+from packages.simulation_core.engine import OpenDSSContextEngine
+from packages.contracts.models import QSTSConfig
+from packages.simulation_core.qsts_profiles import synthetic_mixed_daily_profile
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

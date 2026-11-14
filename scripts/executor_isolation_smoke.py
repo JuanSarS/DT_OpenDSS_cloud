@@ -13,7 +13,7 @@ from uuid import uuid4
 from packages.contracts.jobs import (
     SimulationJob,
 )
-from services.api_manager.execution.local_executor import (
+from services.simulation_worker.executor import (
     LocalSimulationExecutor,
 )
 

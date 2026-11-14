@@ -1,7 +1,7 @@
 from packages.contracts.execution  import (
     SimulationExecutor,
 )
-from services.api_manager.execution.local_executor import (
+from services.simulation_worker.executor import (
     LocalSimulationExecutor,
 )
 

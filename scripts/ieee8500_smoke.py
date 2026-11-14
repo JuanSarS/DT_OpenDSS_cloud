@@ -10,13 +10,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 import psutil
 try : 
-    from app.adapters.opendss.engine import OpenDSSContextEngine
+    from packages.simulation_core.engine import OpenDSSContextEngine
 except ModuleNotFoundError as exc:
     raise RuntimeError(
         "No se pudo cargar la aplicación. Verifique la estructura del proyecto."
     )
 
-from app.adapters.opendss.topology_catalog import NETWORKS_ROOT
+from packages.simulation_core.topology_catalog  import NETWORKS_ROOT
 
 
 

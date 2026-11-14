@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 
-from app.domain.models import (
+from packages.contracts.models import (
     CreateSimulationRequest,
     CreateSimulationResponse,
     SimulationDetail,
@@ -11,13 +11,14 @@ from app.domain.models import (
     SolveRequest,
     SolveResponse,
 )
-from app.domain.errors import (
+from packages.contracts.errors  import (
     SimulationClosedError,
     SimulationNotFoundError,
     TopologyNotFoundError,
 )
-from app.orchestration.container import simulation_service
-from app.platform.metrics import metrics
+from services.api_manager.orchestration.container import simulation_service
+
+from services.api_manager.platform.metrics  import metrics
 import time
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])

@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from fastapi import WebSocket, WebSocketDisconnect
 from uuid import uuid4
-from app.domain.errors import SimulationClosedError, SimulationNotFoundError
-from app.domain.models import (
+from packages.contracts.errors  import SimulationClosedError, SimulationNotFoundError
+from packages.contracts.models  import (
     CreateSimulationRequest,
     CreateSimulationResponse,
     ModelSummary,
@@ -29,8 +29,8 @@ from packages.contracts.progress import (
 from packages.contracts.execution import (
     SimulationExecutor,
 )
-from app.platform.settings import get_settings
-from app.platform.metrics import metrics
+from services.api_manager.platform.settings  import get_settings
+from services.api_manager.platform.metrics  import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -346,10 +346,7 @@ class SimulationService:
 
     async def close(self, session_id: str) -> None:
         session = self._get_session(session_id)
-        session = self._get_session(
-            session_id
-        )   
-
+     
         async with session.lock:
             session.status = (
                 SimulationStatus.CLOSED

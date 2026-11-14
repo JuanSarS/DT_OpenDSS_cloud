@@ -1,4 +1,4 @@
-from app.platform.settings import settings
+from services.api_manager.platform.settings import settings
 from packages.contracts.execution import (
     SimulationExecutor,
 )

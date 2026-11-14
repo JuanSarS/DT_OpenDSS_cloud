@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
+from services.api_manager.main import app
 
 
 def test_health_returns_200() -> None:

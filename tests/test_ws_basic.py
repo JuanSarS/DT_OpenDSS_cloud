@@ -4,10 +4,10 @@ import threading
 import httpx
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.adapters.opendss.engine import OpenDSSContextEngine
-from app.domain.models import QSTSResult
-from app.orchestration.container import (
+from services.api_manager.main import app
+from packages.simulation_core.engine import OpenDSSContextEngine
+from packages.contracts.models import QSTSResult
+from services.api_manager.orchestration.container import (
     simulation_executor,
     simulation_service,
 )

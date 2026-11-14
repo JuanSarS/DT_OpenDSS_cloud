@@ -4,7 +4,7 @@ import httpx
 import pytest
 from altdss import altdss
 
-from app.main import app
+from services.api_manager.main import app
 
 
 @pytest.mark.anyio

@@ -1,7 +1,7 @@
 from services.api_manager.execution.factory import (
     build_simulation_executor,
 )
-from services.api_manager.execution.local_executor import (
+from services.simulation_worker.executor import (
     LocalSimulationExecutor,
 )
 
