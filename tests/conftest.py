@@ -1,5 +1,9 @@
 from pathlib import Path
+import os
 import pytest
+
+
+os.environ.setdefault("AUTH_ENABLED", "false")
 
 
 @pytest.fixture(scope="session", autouse=True)

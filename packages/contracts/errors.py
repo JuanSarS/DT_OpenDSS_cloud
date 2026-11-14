@@ -20,6 +20,18 @@ class SimulationClosedError(RuntimeError):
     """Raised when an operation targets a closed simulation."""
 
 
+class AccessDeniedError(PermissionError):
+    """Raised when a user does not own a simulation."""
+
+
+class QuotaExceededError(RuntimeError):
+    """Raised when a user exceeds the concurrent simulation quota."""
+
+
+class OverloadedError(RuntimeError):
+    """Raised when global job capacity is exhausted."""
+
+
 class SimulationErrorCode(str, Enum):
     INVALID_REQUEST = "INVALID_REQUEST"
     TOPOLOGY_NOT_FOUND = "TOPOLOGY_NOT_FOUND"

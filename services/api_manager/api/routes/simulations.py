@@ -1,102 +1,142 @@
+import time
+
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 
-from packages.contracts.models import (
-    CreateSimulationRequest,
-    CreateSimulationResponse,
-    SimulationDetail,
-    SimulationSummary,
-    QSTSResult,
-    QSTSSolveResponse,
-    QSTSSolveSummary,
-    SolveRequest,
-    SolveResponse,
-)
-from packages.contracts.errors  import (
+from packages.contracts.errors import (
+    AccessDeniedError,
+    OverloadedError,
+    QuotaExceededError,
     SimulationClosedError,
     SimulationNotFoundError,
     TopologyNotFoundError,
 )
+from packages.contracts.models import (
+    CreateSimulationRequest,
+    CreateSimulationResponse,
+    QSTSResult,
+    QSTSSolveResponse,
+    QSTSSolveSummary,
+    SimulationDetail,
+    SimulationSummary,
+    SolveRequest,
+    SolveResponse,
+)
+from services.api_manager.auth.dependencies import (
+    CurrentUser,
+    get_user_from_token,
+)
 from services.api_manager.orchestration.container import simulation_service
-
-from services.api_manager.platform.metrics  import metrics
-import time
+from services.api_manager.platform.metrics import metrics
+from services.api_manager.security.events import (
+    SecurityEvent,
+    record_security_event,
+)
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 websocket_router = APIRouter(prefix="/ws/simulations", tags=["simulations"])
 
 
-@router.post(
-    "",
-    response_model=CreateSimulationResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Crear una simulación",
-    description="Crea una sesión autoritativa con un contexto OpenDSS aislado.",
-)
+@router.post("", response_model=CreateSimulationResponse, status_code=status.HTTP_201_CREATED)
 async def create_simulation(
     request: CreateSimulationRequest,
+    current_user: CurrentUser,
 ) -> CreateSimulationResponse:
     try:
-        return await simulation_service.create(request)
+        return await simulation_service.create(request, owner_id=current_user.username)
     except (TopologyNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.get("", response_model=list[SimulationSummary], summary="Listar simulaciones activas")
-async def list_simulations() -> list[SimulationSummary]:
-    return await simulation_service.list_sessions()
+@router.get("", response_model=list[SimulationSummary])
+async def list_simulations(current_user: CurrentUser) -> list[SimulationSummary]:
+    return await simulation_service.list_sessions(
+        current_user.username,
+        current_user.role == "admin",
+    )
 
 
-@router.get("/{session_id}", response_model=SimulationDetail, summary="Consultar una simulación")
-async def get_simulation(session_id: str) -> SimulationDetail:
+@router.get("/{session_id}", response_model=SimulationDetail)
+async def get_simulation(session_id: str, current_user: CurrentUser) -> SimulationDetail:
     try:
-        return simulation_service.get_detail(session_id)
+        return simulation_service.get_detail(
+            session_id,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
+        )
     except SimulationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        record_security_event(
+            SecurityEvent.ACCESS_DENIED.value,
+            username=current_user.username,
+            path=f"/simulations/{session_id}",
+            status_code=403,
+            detail="session ownership",
+        )
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
-@router.get(
-    "/{session_id}/results",
-    summary="Consultar los resultados de la última simulación",
-)
-async def get_simulation_results(session_id: str) -> dict:
+@router.get("/{session_id}/results")
+async def get_simulation_results(session_id: str, current_user: CurrentUser) -> dict:
     started_at = time.perf_counter()
     try:
-        result = simulation_service.get_results(session_id)
-        metrics.observe(
-            "get_results_ms",
-            (time.perf_counter() - started_at) * 1000.0,
+        result = simulation_service.get_results(
+            session_id,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
         )
+        metrics.observe("get_results_ms", (time.perf_counter() - started_at) * 1000.0)
         return result
     except SimulationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        record_security_event(
+            SecurityEvent.ACCESS_DENIED.value,
+            username=current_user.username,
+            path=f"/simulations/{session_id}/results",
+            status_code=403,
+            detail="session ownership",
+        )
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Cerrar una simulación")
-async def delete_simulation(session_id: str) -> None:
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_simulation(session_id: str, current_user: CurrentUser) -> None:
     try:
-        await simulation_service.close(session_id)
+        await simulation_service.close(
+            session_id,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
+        )
     except SimulationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        record_security_event(
+            SecurityEvent.ACCESS_DENIED.value,
+            username=current_user.username,
+            path=f"/simulations/{session_id}",
+            status_code=403,
+            detail="session ownership",
+        )
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
-@router.post(
-    "/{session_id}/solve",
-    response_model=SolveResponse | QSTSSolveResponse,
-    summary="Resolver una simulación",
-    description=(
-        "Ejecuta Snapshot o QSTS fuera del event loop. "
-        "Sin body conserva el comportamiento Snapshot."
-    ),
-)
+@router.post("/{session_id}/solve", response_model=SolveResponse | QSTSSolveResponse)
 async def solve_simulation(
     session_id: str,
+    current_user: CurrentUser,
     request: SolveRequest | None = None,
 ) -> SolveResponse | QSTSSolveResponse:
     started_at = time.perf_counter()
     try:
-        result = await simulation_service.solve(session_id, request)
+        result = await simulation_service.solve(
+            session_id,
+            request,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
+        )
         metrics.observe(
             "qsts_request_ms" if isinstance(result, QSTSResult) else "snapshot_request_ms",
             (time.perf_counter() - started_at) * 1000.0,
@@ -121,8 +161,19 @@ async def solve_simulation(
         return result
     except SimulationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        record_security_event(
+            SecurityEvent.ACCESS_DENIED.value,
+            username=current_user.username,
+            path=f"/simulations/{session_id}/solve",
+            status_code=403,
+            detail="session ownership",
+        )
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except SimulationClosedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (QuotaExceededError, OverloadedError) as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -130,10 +181,23 @@ async def solve_simulation(
 @websocket_router.websocket("/{session_id}")
 async def simulation_websocket(websocket: WebSocket, session_id: str) -> None:
     try:
-        await simulation_service.subscribe(session_id, websocket)
+        token = None
+        protocols = [item.strip() for item in websocket.headers.get("sec-websocket-protocol", "").split(",")]
+        if "opendss.jwt" in protocols:
+            index = protocols.index("opendss.jwt")
+            if index + 1 < len(protocols):
+                token = protocols[index + 1]
+        user = get_user_from_token(token or "")
+        await simulation_service.subscribe(
+            session_id,
+            websocket,
+            user_id=user.username,
+            is_admin=user.role == "admin",
+            subprotocol="opendss.jwt" if token else None,
+        )
         while True:
             await websocket.receive_text()
-    except SimulationNotFoundError:
+    except (SimulationNotFoundError, AccessDeniedError, HTTPException):
         await websocket.close(code=1008)
     except WebSocketDisconnect:
         simulation_service.unsubscribe(session_id, websocket)

@@ -1,0 +1,14 @@
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'services/api_manager/main.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'services/api_manager/orchestration/simulation_service.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'services/api_manager/platform/logging_config.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'services/api_manager/requirements.lock.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'services/frontend/static/css/app.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'services/frontend/templates/index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/conftest.py', LF will be replaced by CRLF the next time Git touches it
+docs/deployment/LOCAL_DEPLOYMENT.md:6: trailing whitespace.
+[32m+[m[32mDetener[m[41m [m
+docs/deployment/LOCAL_DEPLOYMENT.md:9: trailing whitespace.
+[32m+[m[32m""[m[41m [m
+scripts/deploy_local.ps1:19: trailing whitespace.
+[32m+[m[32m  --build[m[41m [m

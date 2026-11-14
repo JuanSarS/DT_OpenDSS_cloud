@@ -18,6 +18,7 @@ from services.api_manager.orchestration.custom_models import (
     CustomModelError,
     custom_model_manager,
 )
+from services.api_manager.auth.dependencies import AdminUser, CurrentUser
 router = APIRouter(prefix="/models", tags=["models"])
 
 
@@ -26,7 +27,7 @@ class FileUpdate(BaseModel):
 
 
 @router.get("")
-async def list_models() -> list[dict]:
+async def list_models(_: CurrentUser) -> list[dict]:
     return [
         {
             "id": spec.id,
@@ -39,7 +40,10 @@ async def list_models() -> list[dict]:
     ]
 
 @router.post("/upload", status_code=201)
-async def upload_model(file: UploadFile = File(...)) -> dict:
+async def upload_model(
+    _: AdminUser,
+    file: UploadFile = File(...),
+) -> dict:
     try:
         return await custom_model_manager.upload(file)
     except (CustomModelError, ValueError) as exc:
@@ -62,6 +66,7 @@ async def custom_model(model_id: str) -> dict:
 async def validate_model(
     model_id: str,
     master: str,
+    _: AdminUser,
 ) -> dict:
     try:
         custom_model_manager.master_path(
@@ -122,7 +127,11 @@ async def validate_model(
             )
 
 @router.get("/custom/{model_id}/files/{file_path:path}")
-async def read_custom_file(model_id: str, file_path: str) -> dict:
+async def read_custom_file(
+    model_id: str,
+    file_path: str,
+    _: AdminUser,
+) -> dict:
     try:
         return {"path": file_path, "content": custom_model_manager.read_file(model_id, file_path)}
     except (CustomModelError, FileNotFoundError) as exc:
@@ -130,7 +139,12 @@ async def read_custom_file(model_id: str, file_path: str) -> dict:
 
 
 @router.put("/custom/{model_id}/files/{file_path:path}")
-async def update_custom_file(model_id: str, file_path: str, update: FileUpdate) -> dict:
+async def update_custom_file(
+    model_id: str,
+    file_path: str,
+    update: FileUpdate,
+    _: AdminUser,
+) -> dict:
     try:
         custom_model_manager.write_file(model_id, file_path, update.content)
         return {"path": file_path, "saved": True}

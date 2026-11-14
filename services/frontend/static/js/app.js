@@ -8,11 +8,14 @@
     models: [], selectedModel: null, originalDss: "", sessionId: null,
     socket: null, result: null, sessionDetail: null, qstsRows: [], events: [],
     qstsSort: { key: "step", direction: 1 }, voltageRows: [],
+    customModel: null,
+    token: sessionStorage.getItem("opendss_token"),
+    currentUser: null,
   };
   const $ = (selector) => document.querySelector(selector);
   const elements = {
     apiDot: $("#apiDot"), wsDot: $("#wsDot"), globalState: $("#globalState"),
-    modelSelect: $("#modelSelect"), modelName: $("#modelName"), modelSource: $("#modelSource"),
+    modelSelect: $("#modelSelect"), masterSelect: $("#masterSelect"), modelName: $("#modelName"), modelSource: $("#modelSource"),
     editor: $("#dssEditor"), lineNumbers: $("#lineNumbers"), lineCount: $("#lineCount"),
     validation: $("#validationMessage"), simulationType: $("#simulationType"),
     snapshotOptions: $("#snapshotOptions"), loadMultiplier: $("#loadMultiplier"),
@@ -32,15 +35,87 @@
     joinButton: $("#joinSessionBtn"), refreshSessions: $("#refreshSessionsBtn"), sessionsList: $("#sessionsList"),
     sessionsMessage: $("#sessionsMessage"), fileInput: $("#fileInput"), uploadButton: $("#uploadBtn"),
     restoreButton: $("#restoreBtn"), validateButton: $("#validateBtn"), refreshMetrics: $("#refreshMetricsBtn"),
+    loginPanel: $("#loginPanel"), loginForm: $("#loginForm"), loginUsername: $("#loginUsername"),
+    loginPassword: $("#loginPassword"), loginMessage: $("#loginMessage"), workspace: $("#workspace"),
+    userStatus: $("#userStatus"), currentUserLabel: $("#currentUserLabel"), logoutButton: $("#logoutBtn"),
   };
 
   async function api(path, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    if (!(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
+    if (state.token) headers.Authorization = `Bearer ${state.token}`;
     const response = await fetch(`${API_BASE}${path}`, {
-      ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      ...options, headers,
     });
     const data = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      logout(false);
+      throw new Error("La sesión expiró o no es válida.");
+    }
     if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
     return data;
+  }
+  function showWorkspace() {
+    elements.loginPanel.hidden = true;
+    elements.workspace.hidden = false;
+    elements.userStatus.hidden = false;
+    const user = state.currentUser;
+    elements.currentUserLabel.textContent = user ? `${user.username} · ${user.role}` : "";
+    const isAdmin = user?.role === "admin";
+    elements.uploadButton.hidden = !isAdmin;
+    elements.validateButton.hidden = !isAdmin;
+    elements.restoreButton.hidden = !isAdmin;
+    document.querySelectorAll('[data-panel="metrics"], .tab[data-tab="metrics"]').forEach((item) => {
+      item.hidden = !isAdmin;
+    });
+  }
+  function showLogin(message = "") {
+    elements.loginPanel.hidden = false;
+    elements.workspace.hidden = true;
+    elements.userStatus.hidden = true;
+    elements.loginMessage.textContent = message;
+  }
+  function logout(show = true) {
+    state.token = null;
+    state.currentUser = null;
+    sessionStorage.removeItem("opendss_token");
+    if (state.socket) state.socket.close();
+    if (show) showLogin("Sesión cerrada.");
+  }
+  async function login(event) {
+    event.preventDefault();
+    const body = new URLSearchParams({
+      username: elements.loginUsername.value,
+      password: elements.loginPassword.value,
+    });
+    try {
+      const response = await fetch(`${API_BASE}/auth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Credenciales inválidas.");
+      state.token = data.access_token;
+      sessionStorage.setItem("opendss_token", state.token);
+      state.currentUser = await api("/auth/me");
+      showWorkspace();
+      await loadModels();
+      await loadSessions();
+    } catch (error) {
+      logout(false);
+      showLogin(error.message);
+    }
+  }
+  async function authenticate() {
+    try {
+      state.currentUser = await api("/auth/me");
+      showWorkspace();
+      return true;
+    } catch {
+      showLogin();
+      return false;
+    }
   }
   function toast(message) {
     elements.toast.textContent = message; elements.toast.classList.add("show");
@@ -104,21 +179,86 @@
     if (state.models.length) await selectModel(state.models[0].id);
   }
   async function selectModel(id) {
+    state.customModel = null;
+    elements.masterSelect.hidden = true;
     state.selectedModel = state.models.find((model) => model.id === id); if (!state.selectedModel) return;
     elements.modelName.textContent = state.selectedModel.name; elements.modelSource.textContent = "Modelo disponible en el catálogo.";
     state.originalDss = `// Modelo seleccionado: ${state.selectedModel.id}\n`;
-    elements.editor.value = state.originalDss; updateLineNumbers(); elements.restoreButton.disabled = false;
+    elements.editor.value = state.originalDss; updateLineNumbers();
+    elements.restoreButton.disabled = false;
+    elements.validateButton.disabled = false;
+    elements.validation.className = "validation-message neutral";
+    elements.validation.textContent = "El modelo todavía no ha sido validado.";
+  }
+  async function selectCustomMaster(master) {
+    if (!state.customModel || !master) return;
+    state.customModel.master = master;
+    const data = await api(`/models/custom/${encode(state.customModel.model_id)}/files/${encode(master)}`);
+    state.originalDss = data.content;
+    elements.editor.value = data.content;
+    elements.modelName.textContent = `custom:${state.customModel.model_id}:${master}`;
+    elements.modelSource.textContent = "Modelo personalizado cargado desde la API.";
+    elements.restoreButton.disabled = false;
+    elements.validateButton.disabled = false;
+    elements.validation.className = "validation-message neutral";
+    elements.validation.textContent = "El modelo todavía no ha sido validado.";
+    updateLineNumbers();
   }
   function updateLineNumbers() {
     const count = Math.max(1, elements.editor.value.split("\n").length);
     elements.lineNumbers.textContent = Array.from({ length: count }, (_, index) => index + 1).join("\n");
     elements.lineCount.textContent = `${count} línea(s)`;
   }
-  function validateModel() {
+  async function validateModel() {
     if (!elements.editor.value.trim()) {
       elements.validation.className = "validation-message error"; elements.validation.textContent = "El editor está vacío."; return false;
     }
-    elements.validation.className = "validation-message valid"; elements.validation.textContent = "Modelo válido para continuar."; return true;
+    if (!state.customModel) {
+      elements.validation.className = "validation-message valid";
+      elements.validation.textContent = "Modelo válido para continuar.";
+      return true;
+    }
+    try {
+      await api(`/models/custom/${encode(state.customModel.model_id)}/files/${encode(state.customModel.master)}`, {
+        method: "PUT",
+        body: JSON.stringify({ content: elements.editor.value }),
+      });
+      const result = await api(
+        `/models/custom/${encode(state.customModel.model_id)}/validate?master=${encode(state.customModel.master)}`,
+        { method: "POST" },
+      );
+      if (!result.valid) throw new Error(result.message || "El backend rechazó el modelo.");
+      state.selectedModel = {
+        id: `custom:${state.customModel.model_id}:${state.customModel.master}`,
+        name: `custom:${state.customModel.model_id}:${state.customModel.master}`,
+        source: "custom",
+        available: true,
+      };
+      elements.validation.className = "validation-message valid";
+      elements.validation.textContent = "Modelo válido.";
+      return true;
+    } catch (error) {
+      elements.validation.className = "validation-message error";
+      elements.validation.textContent = `Modelo inválido: ${error.message}`;
+      return false;
+    }
+  }
+  async function uploadCustomModel(file) {
+    const form = new FormData();
+    form.append("file", file);
+    const metadata = await api("/models/upload", { method: "POST", body: form });
+    if (!metadata.masters?.length) throw new Error("La API no devolvió masters DSS.");
+    state.customModel = {
+      model_id: metadata.model_id,
+      masters: metadata.masters,
+      master: metadata.masters[0],
+    };
+    const customOption = new Option(`custom:${metadata.model_id}`, `custom:${metadata.model_id}`);
+    elements.modelSelect.add(customOption);
+    elements.modelSelect.value = customOption.value;
+    elements.masterSelect.replaceChildren(...metadata.masters.map((master) => new Option(master, master)));
+    elements.masterSelect.hidden = metadata.masters.length <= 1;
+    await selectCustomMaster(metadata.masters[0]);
   }
   async function loadSessions() {
     elements.sessionsMessage.textContent = "Cargando simulaciones..."; elements.sessionsList.replaceChildren();
@@ -149,7 +289,8 @@
   function connectWebSocket() {
     if (state.socket) state.socket.close();
     setDot(elements.wsDot, "waiting", "Conectando WebSocket");
-    state.socket = new WebSocket(`${WS_BASE}/ws/simulations/${encode(state.sessionId)}`);
+    const protocols = state.token ? ["opendss.jwt", state.token] : undefined;
+    state.socket = new WebSocket(`${WS_BASE}/ws/simulations/${encode(state.sessionId)}`, protocols);
     state.socket.onopen = () => { setDot(elements.wsDot, "online", "WebSocket conectado"); setLine("ws", "done"); logEvent("WebSocket", "conectado"); };
     state.socket.onclose = () => { setDot(elements.wsDot, "offline", "WebSocket desconectado"); logEvent("WebSocket", "conexión cerrada"); };
     state.socket.onerror = () => { setDot(elements.wsDot, "offline", "Error WebSocket"); toast("El WebSocket perdió la conexión."); };
@@ -180,7 +321,7 @@
     if (message.type === "completed") { setDot(elements.wsDot, "online", "WebSocket conectado"); setLine("solve", "done"); setLine("result", "done"); setProgress(100, "Simulación completada"); loadResults(); }
   }
   async function createSimulation() {
-    if (!state.selectedModel || !validateModel()) return;
+    if (!state.selectedModel || !(await validateModel())) return;
     try {
       const session = await api("/simulations", { method: "POST", body: JSON.stringify({ topology: state.selectedModel.id, load_multiplier: Number(elements.loadMultiplier.value || 1) }) });
       await joinSession(session.session_id); await loadSessions();
@@ -293,7 +434,8 @@
   }
   function registerEvents() {
     elements.modelSelect.onchange = (event) => selectModel(event.target.value);
-    elements.editor.oninput = updateLineNumbers; elements.validateButton.onclick = validateModel;
+    elements.masterSelect.onchange = (event) => selectCustomMaster(event.target.value);
+    elements.editor.oninput = updateLineNumbers; elements.validateButton.onclick = () => validateModel();
     elements.restoreButton.onclick = () => { elements.editor.value = state.originalDss; updateLineNumbers(); };
     elements.simulationType.onchange = updateProfileControls; elements.profileSource.onchange = updateProfileControls;
     elements.durationHours.oninput = updateProfileControls; elements.stepMinutes.oninput = updateProfileControls; elements.valuesInput.oninput = updateProfileControls;
@@ -302,11 +444,27 @@
     elements.refreshSessions.onclick = loadSessions; elements.voltageSearch.oninput = renderVoltageRows; elements.qstsSearch.oninput = renderQstsRows; elements.refreshMetrics.onclick = loadMetrics;
     document.querySelectorAll("[data-qsts-sort]").forEach((header) => header.onclick = () => { const key = header.dataset.qstsSort; state.qstsSort = { key, direction: state.qstsSort.key === key ? -state.qstsSort.direction : 1 }; renderQstsRows(); });
     document.querySelectorAll(".tab").forEach((tab) => tab.onclick = () => { document.querySelectorAll(".tab,.tab-panel").forEach((item) => item.classList.remove("is-active", "is-visible")); tab.classList.add("is-active"); $(`[data-panel="${tab.dataset.tab}"]`)?.classList.add("is-visible"); });
-    elements.uploadButton.onclick = () => elements.fileInput.click(); elements.fileInput.onchange = (event) => { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { state.originalDss = String(reader.result); elements.editor.value = state.originalDss; elements.modelName.textContent = file.name; elements.modelSource.textContent = "Modelo personalizado cargado localmente."; updateLineNumbers(); validateModel(); }; reader.readAsText(file); };
+    elements.uploadButton.onclick = () => elements.fileInput.click();
+    elements.fileInput.onchange = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        await uploadCustomModel(file);
+        logEvent("Modelo personalizado", "cargado en la API");
+      } catch (error) {
+        toast(`No fue posible cargar el modelo: ${error.message}`);
+        logEvent("Modelo personalizado", error.message);
+      }
+    };
+    elements.loginForm.onsubmit = login;
+    elements.logoutButton.onclick = () => logout();
   }
   async function initialize() {
     registerEvents(); updateProfileControls(); setDot(elements.apiDot, "waiting", "Comprobando API");
-    try { await loadModels(); setDot(elements.apiDot, "online", "API disponible"); elements.globalState.textContent = "API disponible"; await loadSessions(); }
+    try {
+      if (!(await authenticate())) return;
+      await loadModels(); setDot(elements.apiDot, "online", "API disponible"); elements.globalState.textContent = "API disponible"; await loadSessions();
+    }
     catch (error) { setDot(elements.apiDot, "offline", "API no disponible"); elements.globalState.textContent = "API no disponible"; toast("No fue posible conectar con la API."); logEvent("API", error.message); }
   }
   initialize();

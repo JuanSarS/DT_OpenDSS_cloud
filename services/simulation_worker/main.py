@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from packages.contracts.errors import (
@@ -25,6 +25,7 @@ from services.simulation_worker.executor import (
 from services.simulation_worker.settings import (
     worker_settings,
 )
+from services.simulation_worker.security import require_worker_token
 
 
 app = FastAPI(
@@ -57,6 +58,7 @@ async def health() -> WorkerHealthResponse:
 )
 async def prepare_session(
     request: WorkerPrepareSessionRequest,
+    _: None = Depends(require_worker_token),
 ) -> WorkerSessionInfo:
     try:
         info = await executor.prepare_session(
@@ -88,6 +90,7 @@ async def prepare_session(
 )
 async def session_info(
     session_id: str,
+    _: None = Depends(require_worker_token),
 ) -> WorkerSessionInfo:
     try:
         info = await executor.session_info(
@@ -112,6 +115,7 @@ async def session_info(
 )
 async def close_session(
     session_id: str,
+    _: None = Depends(require_worker_token),
 ) -> None:
     await executor.close_session(
         session_id
@@ -124,6 +128,7 @@ async def close_session(
 )
 async def job_status(
     job_id: str,
+    _: None = Depends(require_worker_token),
 ) -> WorkerJobStatusResponse:
     try:
         status = await executor.status(
@@ -148,6 +153,7 @@ async def job_status(
 )
 async def cancel_job(
     job_id: str,
+    _: None = Depends(require_worker_token),
 ) -> WorkerJobStatusResponse:
     try:
         status = await executor.cancel(
@@ -171,6 +177,7 @@ async def cancel_job(
 )
 async def execute_job(
     request: WorkerExecuteRequest,
+    _: None = Depends(require_worker_token),
 ) -> StreamingResponse:
 
     job = request.job

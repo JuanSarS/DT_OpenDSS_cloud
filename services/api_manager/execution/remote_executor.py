@@ -4,6 +4,7 @@ import json
 
 import httpx
 
+from packages.common.secrets import read_secret
 from packages.contracts.errors import (
     SimulationError,
 )
@@ -61,6 +62,11 @@ class RemoteSimulationExecutor:
             timeout=httpx.Timeout(
                 self._timeout
             ),
+            headers={
+                "Authorization": (
+                    f"Bearer {read_secret('WORKER_SHARED_TOKEN')}"
+                )
+            },
         )
 
     async def prepare_session(

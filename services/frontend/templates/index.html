@@ -19,10 +19,24 @@
     <div class="connection-status">
       <div class="status-item"><span>API</span><span id="apiDot" class="status-dot status-waiting"></span></div>
       <div class="status-item"><span>WS</span><span id="wsDot" class="status-dot status-offline"></span></div>
+      <div id="userStatus" class="user-status" hidden>
+        <span id="currentUserLabel"></span>
+        <button id="logoutBtn" class="link-button" type="button">Cerrar sesión</button>
+      </div>
     </div>
   </header>
 
-  <main class="page">
+  <section id="loginPanel" class="login-panel" hidden>
+    <h2>Iniciar sesión</h2>
+    <form id="loginForm">
+      <label class="field">Usuario<input id="loginUsername" class="input" autocomplete="username" required /></label>
+      <label class="field">Password<input id="loginPassword" class="input" type="password" autocomplete="current-password" required /></label>
+      <button class="button button-primary" type="submit">Entrar</button>
+      <p id="loginMessage" class="validation-message neutral"></p>
+    </form>
+  </section>
+
+  <main id="workspace" class="page" hidden>
     <section class="intro">
       <div>
         <h2>Consola de simulación</h2>
@@ -57,6 +71,7 @@
         <div class="heading-actions">
           <label for="modelSelect" class="field-label inline-label">Modelo</label>
           <select id="modelSelect" class="select select-model"><option value="">Cargando modelos…</option></select>
+          <select id="masterSelect" class="select select-model" hidden aria-label="Master DSS"></select>
           <input id="fileInput" type="file" accept=".dss,.zip" hidden />
           <button id="uploadBtn" class="button button-secondary" type="button">Cargar DSS / ZIP</button>
         </div>

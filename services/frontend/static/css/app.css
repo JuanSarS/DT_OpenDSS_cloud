@@ -51,6 +51,20 @@ button:disabled {
   border-bottom:1px solid var(--line-soft);
   backdrop-filter:blur(10px)
 }
+
+.user-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.login-panel {
+  max-width: 28rem;
+  margin: 4rem auto;
+  padding: 2rem;
+  background: var(--surface, #fff);
+  border-radius: 0.75rem;
+}
 .brand {
   display:flex;
   align-items:center;

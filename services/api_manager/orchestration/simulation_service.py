@@ -7,7 +7,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from fastapi import WebSocket, WebSocketDisconnect
 from uuid import uuid4
-from packages.contracts.errors  import SimulationClosedError, SimulationNotFoundError
+from packages.contracts.errors import (
+    AccessDeniedError,
+    OverloadedError,
+    QuotaExceededError,
+    SimulationClosedError,
+    SimulationNotFoundError,
+)
 from packages.contracts.models  import (
     CreateSimulationRequest,
     CreateSimulationResponse,
@@ -35,6 +41,14 @@ from services.api_manager.platform.metrics  import metrics
 logger = logging.getLogger(__name__)
 
 
+def _normalize_topology(topology: str) -> str:
+    value = topology.strip()
+    if value.lower().startswith("custom:"):
+        prefix, model_id, master = value.split(":", 2)
+        return f"custom:{model_id}:{master}"
+    return value.lower()
+
+
 @dataclass
 class SimulationSession:
     session_id: str
@@ -42,6 +56,7 @@ class SimulationSession:
     created_at: datetime
     lock: asyncio.Lock
     model_summary: ModelSummary
+    owner_id: str
     runtime_identity: int | str | None = None
     load_multiplier: float = 1.0
     status: SimulationStatus = SimulationStatus.CREATED
@@ -65,10 +80,11 @@ class SimulationService:
     ) -> None:
         self._sessions: dict[str, SimulationSession] = {}
         self._registry_lock = asyncio.Lock()
+        self._admission_lock = asyncio.Lock()
         self._executor = executor
 
     async def create(
-        self, request: CreateSimulationRequest
+        self, request: CreateSimulationRequest, * ,owner_id: str,
     ) -> CreateSimulationResponse:
         started_at = time.perf_counter()
         async with self._registry_lock:
@@ -80,7 +96,7 @@ class SimulationService:
         execution_info = (
                     await self._executor.prepare_session(
                         session_id=session_id,
-                        topology=request.topology.lower(),
+                        topology=_normalize_topology(request.topology),
                         load_multiplier=(
                             request.load_multiplier
                         ),
@@ -88,7 +104,7 @@ class SimulationService:
                 )
         session = SimulationSession(
             session_id=session_id,
-            topology=request.topology.lower(),
+            topology=_normalize_topology(request.topology),
             status=SimulationStatus.READY,
             model_summary=execution_info.model_summary,
             task_count=execution_info.task_count,
@@ -96,6 +112,7 @@ class SimulationService:
             created_at=created_at,
             runtime_identity=execution_info.runtime_identity,
             load_multiplier=execution_info.load_multiplier,
+            owner_id=owner_id
         )
 
         async with self._registry_lock:
@@ -121,13 +138,19 @@ class SimulationService:
         )
 
     async def solve(
-        self, session_id: str, request: SolveRequest | None = None
+        self,
+        session_id: str,
+        request: SolveRequest | None = None,
+        *,
+        user_id: str | None = None,
+        is_admin: bool = True,
     ) -> SolveResponse | QSTSResult:
         session = self._sessions.get(session_id)
         if session is None:
             raise SimulationNotFoundError(
                 f"No existe una simulación con session_id={session_id}"
             )
+        self._authorize_session(session_id, user_id, is_admin)
 
         # Never execute two solves simultaneously against the same context.
         # Different sessions still run concurrently because each has its own lock
@@ -136,6 +159,25 @@ class SimulationService:
             raise SimulationClosedError(f"La simulación {session_id} está cerrada")
 
         async with session.lock:
+            if get_settings().admission_control_enabled:
+                async with self._admission_lock:
+                    running = [
+                        item
+                        for item in self._sessions.values()
+                        if item.status == SimulationStatus.RUNNING
+                    ]
+                    owner_running = sum(
+                        item.owner_id == session.owner_id
+                        for item in running
+                    )
+                    if owner_running >= get_settings().max_concurrent_simulations_per_user:
+                        raise QuotaExceededError(
+                            "Se alcanzó la cuota de simulaciones concurrentes"
+                        )
+                    if len(running) >= get_settings().max_concurrent_jobs:
+                        raise OverloadedError(
+                            "Se alcanzó la capacidad global de jobs"
+                        )
             session.status = SimulationStatus.RUNNING
             session.last_error = None
             request = request or SolveRequest()
@@ -177,6 +219,7 @@ class SimulationService:
                     effective_load_multiplier
                 ),
                 qsts=qsts_config,
+                user_id = session.owner_id
             )
             if request.simulation_type == "qsts" and request.qsts is not None:
                 session.total_steps = request.qsts.to_config().total_steps
@@ -277,7 +320,11 @@ class SimulationService:
         )
         return result
 
-    async def list_sessions(self) -> list[SimulationSummary]:
+    async def list_sessions(
+        self,
+        user_id: str | None = None,
+        is_admin: bool = True,
+    ) -> list[SimulationSummary]:
         return [
             SimulationSummary(
                 session_id=session.session_id,
@@ -287,11 +334,19 @@ class SimulationService:
                 task_count=session.task_count,
             )
             for session in self._sessions.values()
+            if is_admin or session.owner_id == user_id
         ]
 
 
-    def get_detail(self, session_id: str) -> SimulationDetail:
+    def get_detail(
+        self,
+        session_id: str,
+        *,
+        user_id: str | None = None,
+        is_admin: bool = True,
+    ) -> SimulationDetail:
         session = self._get_session(session_id)
+        self._authorize_session(session_id, user_id, is_admin)
         return SimulationDetail(
             session_id=session.session_id,
             topology=session.topology,
@@ -320,8 +375,15 @@ class SimulationService:
             if key not in {"config", "steps"}
         }
 
-    def get_results(self, session_id: str) -> dict:
+    def get_results(
+        self,
+        session_id: str,
+        *,
+        user_id: str | None = None,
+        is_admin: bool = True,
+    ) -> dict:
         session = self._get_session(session_id)
+        self._authorize_session(session_id, user_id, is_admin)
         if session.last_result is None:
             raise LookupError("La simulación todavía no tiene resultados")
         if isinstance(session.last_result, QSTSResult):
@@ -344,8 +406,15 @@ class SimulationService:
             "result": session.last_result.model_dump(),
         }
 
-    async def close(self, session_id: str) -> None:
+    async def close(
+        self,
+        session_id: str,
+        *,
+        user_id: str | None = None,
+        is_admin: bool = True,
+    ) -> None:
         session = self._get_session(session_id)
+        self._authorize_session(session_id, user_id, is_admin)
      
         async with session.lock:
             session.status = (
@@ -373,9 +442,18 @@ class SimulationService:
 
         session.subscribers.clear()
 
-    async def subscribe(self, session_id: str, websocket: WebSocket) -> None:
+    async def subscribe(
+        self,
+        session_id: str,
+        websocket: WebSocket,
+        *,
+        user_id: str | None = None,
+        is_admin: bool = True,
+        subprotocol: str | None = None,
+    ) -> None:
         session = self._get_session(session_id)
-        await websocket.accept()
+        self._authorize_session(session_id, user_id, is_admin)
+        await websocket.accept(subprotocol=subprotocol)
         session.subscribers.add(websocket)
         await websocket.send_json(
             {
@@ -435,6 +513,20 @@ class SimulationService:
                 f"No existe una simulación con session_id={session_id}"
             )
         return session
+
+    def _authorize_session(
+        self,
+        session_id: str,
+        user_id: str | None,
+        is_admin: bool,
+    ) -> None:
+        if is_admin:
+            return
+        session = self._get_session(session_id)
+        if user_id is None or session.owner_id != user_id:
+            raise AccessDeniedError(
+                f"El usuario no tiene acceso a la simulación {session_id}"
+            )
 
     async def session_engine_identity(
         self,

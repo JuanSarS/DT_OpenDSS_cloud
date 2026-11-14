@@ -16,7 +16,7 @@ docker compose `
   -f $ComposeFile `
   up `
   -d `
-  --build
+  --build 
 
 if ($LASTEXITCODE -ne 0) {
     throw "docker compose up failed"

@@ -13,6 +13,7 @@ RUN pip install \
 
 COPY packages/__init__.py ./packages/__init__.py
 COPY packages/contracts ./packages/contracts
+COPY packages/common ./packages/common
 
 COPY services/__init__.py ./services/__init__.py
 COPY services/api_manager ./services/api_manager
