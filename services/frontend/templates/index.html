@@ -26,15 +26,78 @@
     </div>
   </header>
 
-  <section id="loginPanel" class="login-panel" hidden>
-    <h2>Iniciar sesión</h2>
-    <form id="loginForm">
-      <label class="field">Usuario<input id="loginUsername" class="input" autocomplete="username" required /></label>
-      <label class="field">Password<input id="loginPassword" class="input" type="password" autocomplete="current-password" required /></label>
-      <button class="button button-primary" type="submit">Entrar</button>
-      <p id="loginMessage" class="validation-message neutral"></p>
+  <section id="loginPanel" class="auth-shell" hidden>
+  <div class="auth-card">
+
+    <div class="auth-identity">
+      <div class="auth-logo">⌁</div>
+
+      <div>
+        <span class="auth-eyebrow">
+          GEMELO DIGITAL HÍBRIDO
+        </span>
+
+        <h2>OpenDSS Cloud</h2>
+
+        <p>
+          Plataforma segura de simulación
+          eléctrica distribuida.
+        </p>
+      </div>
+    </div>
+
+    <div class="auth-divider"></div>
+
+    <form id="loginForm" class="auth-form">
+
+      <label class="field">
+        <span>Usuario</span>
+
+        <input
+          id="loginUsername"
+          class="input auth-input"
+          autocomplete="username"
+          placeholder="Ingrese su usuario"
+          required
+        />
+      </label>
+
+      <label class="field">
+        <span>Contraseña</span>
+
+        <input
+          id="loginPassword"
+          class="input auth-input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="••••••••"
+          required
+        />
+      </label>
+
+      <button
+        class="button button-primary auth-submit"
+        type="submit"
+      >
+        Iniciar sesión
+      </button>
+
+      <p
+        id="loginMessage"
+        class="validation-message neutral auth-message"
+      ></p>
     </form>
-  </section>
+
+    <div class="auth-security">
+      <span>🔒</span>
+      <span>
+        Sesión protegida mediante HTTPS,
+        JWT y control de acceso.
+      </span>
+    </div>
+
+  </div>
+</section>
 
   <main id="workspace" class="page" hidden>
     <section class="intro">
@@ -63,6 +126,45 @@
       </div>
       <p id="sessionsMessage" class="empty-state">Cargando simulaciones...</p>
       <div id="sessionsList" class="sessions-list" aria-live="polite"></div>
+      <div id="sharingPanel" class="sharing-panel" hidden>
+
+        <div class="sharing-heading">
+          <strong>Compartir simulación</strong>
+          <span>
+            Autorice espectadores para consultar
+            progreso y resultados.
+          </span>
+        </div>
+
+        <div class="sharing-actions">
+          <select
+            id="inviteUserSelect"
+            class="select"
+          ></select>
+
+          <button
+            id="inviteUserBtn"
+            class="button button-secondary"
+            type="button"
+          >
+            Invitar
+          </button>
+        </div>
+
+        <div class="sharing-grid">
+
+          <div>
+            <strong>Espectadores</strong>
+            <div id="viewersList"></div>
+          </div>
+
+          <div>
+            <strong>Solicitudes</strong>
+            <div id="accessRequestsList"></div>
+          </div>
+
+        </div>
+      </div>
     </section>
 
     <section class="section" id="modelSection">

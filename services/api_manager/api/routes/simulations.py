@@ -2,7 +2,9 @@ import time
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
-
+from services.api_manager.auth.constants import (
+    ACCESS_COOKIE_NAME,
+)
 from packages.contracts.errors import (
     AccessDeniedError,
     OverloadedError,
@@ -118,6 +120,117 @@ async def remove_viewer(
     except AccessDeniedError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
+@router.post(
+    "/{session_id}/access-requests",
+    status_code=202,
+)
+async def request_access(
+    session_id: str,
+    current_user: CurrentUser,
+) -> dict:
+    try:
+        simulation_service.request_access(
+            session_id,
+            user_id=current_user.username,
+        )
+
+        return {
+            "requested": True
+        }
+
+    except SimulationNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+@router.get(
+    "/{session_id}/access-requests",
+    )
+async def access_requests(
+    session_id: str,
+    current_user: CurrentUser,
+) -> list[str]:
+    try:
+        return (
+            simulation_service
+            .list_access_requests(
+                session_id,
+                user_id=current_user.username,
+                is_admin=(
+                    current_user.role
+                    == "admin"
+                ),
+            )
+        )
+
+    except AccessDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+    
+@router.post(
+    "/{session_id}/access-requests/"
+    "{username}/approve",
+)
+async def approve_access(
+    session_id: str,
+    username: str,
+    current_user: CurrentUser,
+) -> list[str]:
+    try:
+        return (
+            simulation_service
+            .approve_access_request(
+                session_id,
+                username,
+                user_id=current_user.username,
+                is_admin=(
+                    current_user.role
+                    == "admin"
+                ),
+            )
+        )
+
+    except AccessDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+@router.delete(
+    "/{session_id}/access-requests/"
+    "{username}",
+    status_code=204,
+)
+async def reject_access(
+    session_id: str,
+    username: str,
+    current_user: CurrentUser,
+) -> None:
+
+    simulation_service.reject_access_request(
+        session_id,
+        username,
+        user_id=current_user.username,
+        is_admin=(
+            current_user.role
+            == "admin"
+        ),
+    )
 
 @router.get("/{session_id}", response_model=SimulationDetail)
 async def get_simulation(session_id: str, current_user: CurrentUser) -> SimulationDetail:
@@ -261,7 +374,34 @@ async def simulation_websocket(websocket: WebSocket, session_id: str) -> None:
                 )
                 await websocket.close(code=1013)
                 return
-        token = None
+        token = websocket.cookies.get(
+            ACCESS_COOKIE_NAME
+        )
+        selected_subprotocol = None
+
+        if token is None:
+            protocols = [
+                item.strip()
+                for item in websocket.headers.get(
+                    "sec-websocket-protocol",
+                    "",
+                ).split(",")
+                if item.strip()
+            ]
+
+            if "opendss.jwt" in protocols:
+                index = protocols.index(
+                    "opendss.jwt"
+                )
+
+                if index + 1 < len(protocols):
+                    token = protocols[
+                        index + 1
+                    ]
+
+                    selected_subprotocol = (
+                        "opendss.jwt"
+                    )
         protocols = [item.strip() for item in websocket.headers.get("sec-websocket-protocol", "").split(",")]
         if "opendss.jwt" in protocols:
             index = protocols.index("opendss.jwt")
@@ -273,7 +413,7 @@ async def simulation_websocket(websocket: WebSocket, session_id: str) -> None:
             websocket,
             user_id=user.username,
             is_admin=user.role == "admin",
-            subprotocol="opendss.jwt" if token else None,
+            subprotocol=selected_subprotocol,
         )
         while True:
             await websocket.receive_text()

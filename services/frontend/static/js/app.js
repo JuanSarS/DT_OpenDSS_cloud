@@ -9,10 +9,28 @@
     socket: null, result: null, sessionDetail: null, qstsRows: [], events: [],
     qstsSort: { key: "step", direction: 1 }, voltageRows: [],
     customModel: null,
-    token: sessionStorage.getItem("opendss_token"),
+    users: [],
     currentUser: null,
   };
   const $ = (selector) => document.querySelector(selector);
+  const authChannel =
+  typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel(
+        "opendss-auth"
+      )
+    : null;
+  authChannel?.addEventListener(
+    "message",
+    (event) => {
+      if (
+        event.data?.type === "logout"
+      ) {
+        resetAuthenticatedUi(
+          "Sesión cerrada en otra pestaña."
+        );
+      }
+    }
+  );
   const elements = {
     apiDot: $("#apiDot"), wsDot: $("#wsDot"), globalState: $("#globalState"),
     modelSelect: $("#modelSelect"), masterSelect: $("#masterSelect"), modelName: $("#modelName"), modelSource: $("#modelSource"),
@@ -38,19 +56,71 @@
     loginPanel: $("#loginPanel"), loginForm: $("#loginForm"), loginUsername: $("#loginUsername"),
     loginPassword: $("#loginPassword"), loginMessage: $("#loginMessage"), workspace: $("#workspace"),
     userStatus: $("#userStatus"), currentUserLabel: $("#currentUserLabel"), logoutButton: $("#logoutBtn"),
+    sharingPanel: $("#sharingPanel"),
+    inviteUserSelect: $("#inviteUserSelect"),
+    inviteUserButton: $("#inviteUserBtn"),
+    viewersList: $("#viewersList"),
+    accessRequestsList: $("#accessRequestsList"),
   };
+  function resetAuthenticatedUi(
+    message = ""
+  ) {
+    if (state.socket) {
+      state.socket.close();
+    }
 
+    state.socket = null;
+    state.currentUser = null;
+    state.sessionId = null;
+    state.sessionDetail = null;
+    state.result = null;
+    state.qstsRows = [];
+
+    elements.loginPassword.value = "";
+
+    setDot(
+      elements.wsDot,
+      "offline",
+      "WebSocket desconectado"
+    );
+
+    showLogin(message);
+  }
+  async function loadUsers() {
+    state.users = await api(
+      "/auth/users"
+    );
+
+    elements.inviteUserSelect
+      .replaceChildren(
+        ...state.users.map(
+          (user) =>
+            new Option(
+              `${user.username} · ${user.role}`,
+              user.username
+            )
+        )
+      );
+  }
   async function api(path, options = {}) {
     const headers = { ...(options.headers || {}) };
     if (!(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
-    if (state.token) headers.Authorization = `Bearer ${state.token}`;
     const response = await fetch(`${API_BASE}${path}`, {
-      ...options, headers,
+      ...options, headers, credentials: "same-origin",
     });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
-      logout(false);
-      throw new Error("La sesión expiró o no es válida.");
+      authChannel?.postMessage({
+        type: "logout",
+      });
+
+      resetAuthenticatedUi(
+        "La sesión expiró o no es válida."
+      );
+
+      throw new Error(
+        "La sesión expiró o no es válida."
+      );
     }
     if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
     return data;
@@ -75,13 +145,34 @@
     elements.userStatus.hidden = true;
     elements.loginMessage.textContent = message;
   }
-  function logout(show = true) {
-    state.token = null;
-    state.currentUser = null;
-    sessionStorage.removeItem("opendss_token");
-    if (state.socket) state.socket.close();
-    if (show) showLogin("Sesión cerrada.");
+  async function logout(
+    show = true,
+    broadcast = true
+  ) {
+    try {
+      await fetch(
+        `${API_BASE}/auth/logout`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+        }
+      );
+    } catch {
+    } finally {
+      if (broadcast) {
+        authChannel?.postMessage({
+          type: "logout",
+        });
+      }
+
+      resetAuthenticatedUi(
+        show
+          ? "Sesión cerrada."
+          : ""
+      );
+    }
   }
+
   async function login(event) {
     event.preventDefault();
     const body = new URLSearchParams({
@@ -96,8 +187,6 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || "Credenciales inválidas.");
-      state.token = data.access_token;
-      sessionStorage.setItem("opendss_token", state.token);
       state.currentUser = await api("/auth/me");
       showWorkspace();
       await loadModels();
@@ -266,31 +355,149 @@
       const sessions = await api("/simulations");
       elements.sessionsMessage.textContent = sessions.length ? `${sessions.length} simulación(es) activa(s).` : "No hay simulaciones activas.";
       sessions.forEach((session) => {
-        const card = document.createElement("article"); card.className = "session-card";
-        const title = document.createElement("strong"); title.textContent = session.topology;
-        const detail = document.createElement("span"); detail.textContent = `${session.session_id} · ${statusText(session.status)} · ${session.task_count} ejecución(es)`;
-        const button = document.createElement("button"); button.className = "button button-secondary"; button.textContent = "Unirse";
-        button.type = "button"; button.onclick = () => joinSession(session.session_id); card.append(title, detail, button); elements.sessionsList.append(card);
-      });
+          const card =
+            document.createElement("article");
+          card.className = "session-card";
+          const title =
+            document.createElement("strong");
+          title.textContent =
+            session.topology;
+          const detail =
+            document.createElement("span");
+          detail.textContent =
+            `${session.owner_id || "—"} · ` +
+            `${statusText(session.status)} · ` +
+            `${session.task_count} ejecución(es)`;
+          const access =
+            document.createElement("span");
+          access.className =
+            "session-access";
+          access.textContent =
+            session.access_mode;
+          const button =
+            document.createElement("button");
+          button.className =
+            "button button-secondary";
+          button.type = "button";
+          if (
+            session.access_mode
+            === "requestable"
+          ) {
+            button.textContent =
+              "Solicitar acceso";
+            button.onclick =
+              async () => {
+                await api(
+                  `/simulations/${
+                    encode(session.session_id)
+                  }/access-requests`,
+                  {
+                    method: "POST",
+                  }
+                );
+                toast(
+                  "Solicitud enviada."
+                );
+                await loadSessions();
+              };
+          } else if (
+            session.access_mode
+            === "requested"
+          ) {
+            button.textContent =
+              "Solicitud enviada";
+            button.disabled = true;
+          } else {
+            button.textContent = "Abrir";
+            button.onclick = () =>
+              joinSession(
+                session.session_id
+              );
+          }
+          card.append(
+            title,
+            detail,
+            access,
+            button
+          );
+          elements.sessionsList.append(
+             card
+          );
+        });
     } catch (error) { elements.sessionsMessage.textContent = "No se pudo cargar la lista de simulaciones."; logEvent("Lista de simulaciones", error.message); }
   }
+
   async function joinSession(id) {
     const sessionId = id.trim(); if (!sessionId) { toast("Introduzca un session_id válido."); return; }
     try {
-      const session = await api(`/simulations/${encode(sessionId)}`); state.sessionDetail = session; state.sessionId = session.session_id;
-      elements.sessionId.textContent = session.session_id; elements.sessionState.textContent = `Sesión ${statusText(session.status)}`;
-      elements.copySession.disabled = false; elements.solveButton.disabled = session.status === "CLOSED";
-      elements.modelName.textContent = session.topology; elements.modelSource.textContent = "Sesión existente";
+      const session = await api(`/simulations/${encode(sessionId)}`);
+      state.sessionDetail = session; 
+      state.sessionId = session.session_id;
+      
+      
+      elements.sessionId.textContent = session.session_id;  
+      elements.sessionState.textContent = `Sesión ${statusText(session.status)}`;
+      
+      elements.copySession.disabled = false; 
+      
+      const canControl =
+        session.access_mode === "owner"
+        || session.access_mode === "admin";
+
+      elements.solveButton.disabled =
+        session.status === "CLOSED"
+        || !canControl;
+
+      elements.sharingPanel.hidden =
+        !canControl;
+
+      if (canControl) {
+        await loadSharing(
+          session.session_id
+        );
+      }
+      
+      elements.modelName.textContent = session.topology; 
+      elements.modelSource.textContent = "Sesión existente";
+      
       setLine("session", "done"); connectWebSocket();
+      
       if (session.last_result) renderResult(session.last_result); if (session.current_step) updateProgress(session);
       logEvent("Sesión", `unido a ${session.session_id}`);
     } catch (error) { toast(`No fue posible unirse: ${error.message}`); logEvent("Unión rechazada", error.message); }
   }
+
+  async function loadSharing(
+    sessionId
+  ) {
+    await loadUsers();
+
+    const viewers = await api(
+      `/simulations/${
+        encode(sessionId)
+      }/viewers`
+    );
+
+    const requests = await api(
+      `/simulations/${
+        encode(sessionId)
+      }/access-requests`
+    );
+
+    renderViewers(viewers);
+    renderAccessRequests(
+      requests
+    );
+  }
+
   function connectWebSocket() {
     if (state.socket) state.socket.close();
     setDot(elements.wsDot, "waiting", "Conectando WebSocket");
-    const protocols = state.token ? ["opendss.jwt", state.token] : undefined;
-    state.socket = new WebSocket(`${WS_BASE}/ws/simulations/${encode(state.sessionId)}`, protocols);
+    state.socket = new WebSocket(
+    `${WS_BASE}/ws/simulations/${
+      encode(state.sessionId)
+      }`
+    );
     state.socket.onopen = () => { setDot(elements.wsDot, "online", "WebSocket conectado"); setLine("ws", "done"); logEvent("WebSocket", "conectado"); };
     state.socket.onclose = () => { setDot(elements.wsDot, "offline", "WebSocket desconectado"); logEvent("WebSocket", "conexión cerrada"); };
     state.socket.onerror = () => { setDot(elements.wsDot, "offline", "Error WebSocket"); toast("El WebSocket perdió la conexión."); };
@@ -436,10 +643,19 @@
     elements.modelSelect.onchange = (event) => selectModel(event.target.value);
     elements.masterSelect.onchange = (event) => selectCustomMaster(event.target.value);
     elements.editor.oninput = updateLineNumbers; elements.validateButton.onclick = () => validateModel();
-    elements.restoreButton.onclick = () => { elements.editor.value = state.originalDss; updateLineNumbers(); };
-    elements.simulationType.onchange = updateProfileControls; elements.profileSource.onchange = updateProfileControls;
-    elements.durationHours.oninput = updateProfileControls; elements.stepMinutes.oninput = updateProfileControls; elements.valuesInput.oninput = updateProfileControls;
-    elements.createButton.onclick = createSimulation; elements.solveButton.onclick = solveSimulation; elements.copySession.onclick = () => navigator.clipboard.writeText(state.sessionId).then(() => toast("session_id copiado."));
+    elements.restoreButton.onclick = () => { elements.editor.value = state.originalDss; 
+      updateLineNumbers(); 
+    };
+    
+    elements.simulationType.onchange = updateProfileControls; 
+    elements.profileSource.onchange = updateProfileControls;
+    elements.durationHours.oninput = updateProfileControls; 
+    elements.stepMinutes.oninput = updateProfileControls; 
+    elements.valuesInput.oninput = updateProfileControls;
+    elements.createButton.onclick = createSimulation; 
+    elements.solveButton.onclick = solveSimulation; 
+    
+    elements.copySession.onclick = () => navigator.clipboard.writeText(state.sessionId).then(() => toast("session_id copiado."));
     elements.joinButton.onclick = () => joinSession(elements.sessionInput.value); elements.sessionInput.onkeydown = (event) => { if (event.key === "Enter") joinSession(elements.sessionInput.value); };
     elements.refreshSessions.onclick = loadSessions; elements.voltageSearch.oninput = renderVoltageRows; elements.qstsSearch.oninput = renderQstsRows; elements.refreshMetrics.onclick = loadMetrics;
     document.querySelectorAll("[data-qsts-sort]").forEach((header) => header.onclick = () => { const key = header.dataset.qstsSort; state.qstsSort = { key, direction: state.qstsSort.key === key ? -state.qstsSort.direction : 1 }; renderQstsRows(); });
@@ -456,8 +672,43 @@
         logEvent("Modelo personalizado", error.message);
       }
     };
+    elements.inviteUserButton.onclick = async () => {
+      if (!state.sessionId) {
+        return;
+      }
+
+      const username =
+        elements.inviteUserSelect.value;
+
+      if (!username) {
+        return;
+      }
+
+      await api(
+        `/simulations/${
+          encode(state.sessionId)
+        }/viewers`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            username,
+          }),
+        }
+      );
+
+      await loadSharing(
+        state.sessionId
+      );
+
+      toast(
+        `${username} autorizado.`
+      );
+    };
+
     elements.loginForm.onsubmit = login;
     elements.logoutButton.onclick = () => logout();
+  
+  
   }
   async function initialize() {
     registerEvents(); updateProfileControls(); setDot(elements.apiDot, "waiting", "Comprobando API");

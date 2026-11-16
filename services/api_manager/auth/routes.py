@@ -1,16 +1,19 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from packages.contracts.auth import TokenResponse, UserPublic
 from services.api_manager.auth.dependencies import CurrentUser
 from services.api_manager.auth.jwt import create_access_token
-from services.api_manager.auth.users import authenticate_user
+from services.api_manager.auth.users import authenticate_user, load_users
 from services.api_manager.platform.settings import settings
 from services.api_manager.security.events import (
     SecurityEvent,
     record_security_event,
+)
+from services.api_manager.auth.constants import (
+    ACCESS_COOKIE_NAME,
 )
 from services.api_manager.security.rate_limit import rate_limiter
 
@@ -29,6 +32,7 @@ router = APIRouter(
 )
 async def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> TokenResponse:
     settings_value = settings
@@ -75,6 +79,17 @@ async def login(
         issuer=settings.jwt_issuer,
         audience=settings.jwt_audience,
     )
+
+    response.set_cookie(
+        key=ACCESS_COOKIE_NAME,
+        value=access_token,
+        max_age=expires_in,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="strict",
+        path="/",
+    )
+
     record_security_event(
         SecurityEvent.LOGIN_SUCCESS.value,
         username=user.username,
@@ -95,3 +110,44 @@ async def get_me(
     current_user: CurrentUser,
 ) -> UserPublic:
     return current_user
+
+@router.post(
+    "/logout",
+    status_code=204,
+)
+async def logout(
+    response: Response,
+) -> None:
+    response.delete_cookie(
+        key=ACCESS_COOKIE_NAME,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="strict",
+    )
+
+@router.get(
+    "/users",
+    response_model=list[UserPublic],
+)
+async def list_users(
+    current_user: CurrentUser,
+) -> list[UserPublic]:
+
+    return sorted(
+        [
+            UserPublic(
+                username=user.username,
+                role=user.role,
+                disabled=user.disabled,
+            )
+            for user
+            in load_users().values()
+            if (
+                not user.disabled
+                and user.username
+                != current_user.username
+            )
+        ],
+        key=lambda user: user.username,
+    )

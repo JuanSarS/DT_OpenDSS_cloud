@@ -1,9 +1,10 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
 from packages.contracts.auth import UserPublic
+from services.api_manager.auth.constants import ACCESS_COOKIE_NAME
 from services.api_manager.auth.jwt import decode_access_token
 from services.api_manager.auth.users import load_users
 from services.api_manager.platform.settings import settings
@@ -33,12 +34,19 @@ def _unauthorized() -> HTTPException:
 
 
 def get_current_user(
+    request: Request,
     token: Annotated[str | None, Depends(oauth2_scheme)],
 ) -> UserPublic:
+    
     if not settings.auth_enabled:
         return UserPublic(username="dev-admin", role="admin")
-
+    
     if token is None:
+        token = request.cookies.get(
+                    ACCESS_COOKIE_NAME
+                )
+    if token is None:
+        
         raise _unauthorized()
 
     try:
