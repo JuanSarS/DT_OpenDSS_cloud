@@ -76,18 +76,36 @@ class LocalSimulationExecutor:
         load_multiplier: float,
     ) -> ExecutorSessionInfo:
         topology_path = resolve_worker_topology(topology)
+        engine = None
+        try:
+            
 
-        engine = await asyncio.to_thread(
-            OpenDSSContextEngine,
-            topology_path,
-            load_multiplier,
-        )
+            engine = await asyncio.to_thread(
+                OpenDSSContextEngine,
+                topology_path,
+                load_multiplier,
+            )
 
-        model_summary = await asyncio.to_thread(
-            engine.model_summary,
-            topology,
-        )
+            model_summary = await asyncio.to_thread(
+                engine.model_summary,
+                topology,
+            )
+        except Exception as exc:
+             if engine is not None:
+                try:
+                    await asyncio.to_thread(
+                        engine.close
+                    )
+                except Exception:
+                    pass
 
+             raise ValueError(
+                "No se pudo cargar el modelo "
+                f"'{topology}' "
+                f"({topology_path.name}): "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        
         runtime = LocalExecutionSession(
             session_id=session_id,
             topology=topology,

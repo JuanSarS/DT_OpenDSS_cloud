@@ -72,7 +72,9 @@ class SimulationSession:
     simulated_hour: float | None = None
     last_qsts_step: QSTSStepResult | None = None
     subscribers: set[WebSocket] = field(default_factory=set)
-
+    access_request_ids: set[str] = field(
+    default_factory=set
+    )
 
 class SimulationService:
     def __init__(
@@ -325,22 +327,43 @@ class SimulationService:
 
     async def list_sessions(
         self,
-        user_id: str | None = None,
-        is_admin: bool = True,
+        user_id: str,
+        is_admin: bool,
     ) -> list[SimulationSummary]:
-        result = []
+
+        result: list[
+            SimulationSummary
+        ] = []
+
         for session in self._sessions.values():
-            access_mode = self._access_mode(session, user_id, is_admin)
+
+            access_mode = self._access_mode(
+                session,
+                user_id,
+                is_admin,
+            )
+
             if access_mode is None:
-                continue
-            result.append(SimulationSummary(
-                session_id=session.session_id,
-                topology=session.topology,
-                status=session.status,
-                created_at=session.created_at,
-                task_count=session.task_count,
-                access_mode=access_mode,
-            ))
+                if (
+                    user_id
+                    in session.access_request_ids
+                ):
+                    access_mode = "requested"
+                else:
+                    access_mode = "requestable"
+
+            result.append(
+                SimulationSummary(
+                    session_id=session.session_id,
+                    topology=session.topology,
+                    status=session.status,
+                    created_at=session.created_at,
+                    task_count=session.task_count,
+                    access_mode=access_mode,
+                    owner_id=session.owner_id,
+                )
+            )
+
         return result
 
 
@@ -552,6 +575,126 @@ class SimulationService:
             raise AccessDeniedError(
                 f"El usuario no tiene acceso a la simulación {session_id}"
             )
+    def request_access(
+        self,
+        session_id: str,
+        *,
+        user_id: str,
+    ) -> None:
+
+        session = self._get_session(
+            session_id
+        )
+
+        if session.owner_id == user_id:
+            raise ValueError(
+                "El propietario ya tiene acceso"
+            )
+
+        if user_id in session.viewer_ids:
+            raise ValueError(
+                "El usuario ya es viewer"
+            )
+
+        session.access_request_ids.add(
+            user_id
+        )
+
+    def list_access_requests(
+        self,
+        session_id: str,
+        *,
+        user_id: str,
+        is_admin: bool,
+    ) -> list[str]:
+
+        session = self._get_session(
+            session_id
+        )
+
+        if (
+            not is_admin
+            and session.owner_id
+            != user_id
+        ):
+            raise AccessDeniedError(
+                "Solo el propietario puede "
+                "gestionar solicitudes"
+            )
+
+        return sorted(
+            session.access_request_ids
+        )
+
+    def approve_access_request(
+        self,
+        session_id: str,
+        username: str,
+        *,
+        user_id: str,
+        is_admin: bool,
+    ) -> list[str]:
+
+        session = self._get_session(
+            session_id
+        )
+
+        if (
+            not is_admin
+            and session.owner_id
+            != user_id
+        ):
+            raise AccessDeniedError(
+                "Solo el propietario puede "
+                "aprobar solicitudes"
+            )
+
+        if (
+            username
+            not in session.access_request_ids
+        ):
+            raise ValueError(
+                "No existe solicitud pendiente"
+            )
+
+        session.access_request_ids.discard(
+            username
+        )
+
+        session.viewer_ids.add(
+            username
+        )
+
+        return sorted(
+            session.viewer_ids
+        )
+
+    def reject_access_request(
+        self,
+        session_id: str,
+        username: str,
+        *,
+        user_id: str,
+        is_admin: bool,
+    ) -> None:
+
+        session = self._get_session(
+            session_id
+        )
+
+        if (
+            not is_admin
+            and session.owner_id
+            != user_id
+        ):
+            raise AccessDeniedError(
+                "Solo el propietario puede "
+                "rechazar solicitudes"
+            )
+
+        session.access_request_ids.discard(
+            username
+        )
 
     def list_viewers(
         self,
@@ -579,6 +722,7 @@ class SimulationService:
         if username == session.owner_id:
             raise ValueError("El propietario no puede agregarse como viewer")
         session.viewer_ids.add(username)
+        session.access_request_ids.discard(username)
         return sorted(session.viewer_ids)
 
     def remove_viewer(

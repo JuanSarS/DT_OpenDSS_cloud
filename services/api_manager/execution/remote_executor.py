@@ -51,7 +51,9 @@ class RemoteSimulationExecutor:
                 "/internal/sessions",
                 json=request.model_dump(mode="json"),
             )
-            response.raise_for_status()
+            self._raise_prepare_error(
+                response
+            )
             return WorkerSessionInfo.model_validate(
                 response.json()
             ).to_executor_info()
@@ -68,7 +70,9 @@ class RemoteSimulationExecutor:
                 "/internal/jobs/execute",
                 json=WorkerExecuteRequest(job=job).model_dump(mode="json"),
             ) as response:
-                response.raise_for_status()
+                self._raise_prepare_error(
+                response
+            )
                 async for line in response.aiter_lines():
                     if not line:
                         continue
@@ -93,7 +97,9 @@ class RemoteSimulationExecutor:
     async def status(self, job_id: str) -> JobStatus:
         async with self._client() as client:
             response = await client.get(f"/internal/jobs/{job_id}/status")
-            response.raise_for_status()
+            self._raise_prepare_error(
+                response
+            )
             return WorkerJobStatusResponse.model_validate(
                 response.json()
             ).status
@@ -101,7 +107,9 @@ class RemoteSimulationExecutor:
     async def cancel(self, job_id: str) -> JobStatus:
         async with self._client() as client:
             response = await client.post(f"/internal/jobs/{job_id}/cancel")
-            response.raise_for_status()
+            self._raise_prepare_error(
+                response
+            )
             return WorkerJobStatusResponse.model_validate(
                 response.json()
             ).status
@@ -109,7 +117,9 @@ class RemoteSimulationExecutor:
     async def session_info(self, session_id: str) -> ExecutorSessionInfo:
         async with self._client() as client:
             response = await client.get(f"/internal/sessions/{session_id}")
-            response.raise_for_status()
+            self._raise_prepare_error(
+                response
+            )
             return WorkerSessionInfo.model_validate(
                 response.json()
             ).to_executor_info()
@@ -117,4 +127,38 @@ class RemoteSimulationExecutor:
     async def close_session(self, session_id: str) -> None:
         async with self._client() as client:
             response = await client.delete(f"/internal/sessions/{session_id}")
-            response.raise_for_status()
+            self._raise_prepare_error(
+                response
+            )
+
+    def _raise_prepare_error(
+        self,
+        response: httpx.Response,
+    ) -> None:
+        if not response.is_error:
+            return
+
+        if response.status_code in {
+            502,
+            503,
+            504,
+        }:
+            self._raise_prepare_error(
+    response
+)
+
+        try:
+            payload = response.json()
+
+            detail = payload.get(
+                "detail",
+                response.text,
+            )
+
+        except Exception:
+            detail = response.text
+
+        raise RemoteWorkerError(
+            f"Worker {self._base_url}: "
+            f"{detail or 'error desconocido'}"
+        )
