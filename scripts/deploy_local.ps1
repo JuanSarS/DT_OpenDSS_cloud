@@ -17,21 +17,73 @@ docker compose -f $ComposeFile up -d --build
 if ($LASTEXITCODE -ne 0) { throw "docker compose up failed" }
 
 Write-Host "[2] Esperando contenedores healthy"
+Write-Host ""
+Write-Host "[2] Esperando contenedores y gateway HTTPS..."
+
+$ready = $false
+
 for ($i = 0; $i -lt 60; $i++) {
-  $status = docker compose -f $ComposeFile ps --format json 2>$null
-  if ($status -and ($status | Select-String 'unhealthy' -Quiet) -eq $false) {
-    try {
-      $probe = curl.exe -ksS "$BaseUrl/health"
-      if ($probe -match '"status"\s*:\s*"ok"') { break }
-    } catch {}
-  }
-  if ($i -eq 59) {
-    docker compose -f $ComposeFile logs --tail=200
-    throw "El laboratorio no alcanzó estado healthy"
-  }
-  Start-Sleep -Seconds 2
+
+    # Primero comprobamos que ningún servicio con healthcheck
+    # haya entrado explícitamente en estado unhealthy.
+    $status = docker compose `
+        -f $ComposeFile `
+        ps `
+        --format json `
+        2>$null
+
+    $hasUnhealthy = (
+        $status -and
+        (
+            $status |
+            Select-String "unhealthy" -Quiet
+        )
+    )
+
+    if (-not $hasUnhealthy) {
+
+        # Gateway se valida de extremo a extremo:
+        # navegador -> Caddy -> API Manager.
+        try {
+            $probe = curl.exe `
+                -ksS `
+                "$BaseUrl/health" `
+                2>$null
+
+            if (
+                $LASTEXITCODE -eq 0 -and
+                $probe -match '"status"\s*:\s*"ok"'
+            ) {
+                $ready = $true
+                break
+            }
+        }
+        catch {
+        }
+    }
+
+    Start-Sleep -Seconds 2
 }
 
+if (-not $ready) {
+
+    Write-Host ""
+    Write-Host "Estado de los servicios:"
+    docker compose `
+        -f $ComposeFile `
+        ps
+
+    Write-Host ""
+    Write-Host "Últimos logs:"
+    docker compose `
+        -f $ComposeFile `
+        logs `
+        --tail=200
+
+    throw "El laboratorio no alcanzó estado operativo"
+}
+
+Write-Host "[OK] Gateway HTTPS y API responden correctamente"
 Write-Host "[3] Verificando pool interno"
 $workers = @(
   "simulation-worker-1",

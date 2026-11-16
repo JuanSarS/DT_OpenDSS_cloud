@@ -44,7 +44,20 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-check-certificate",
+          "-q",
+          "--spider",
+          "https://localhost/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   simulation-worker-1: *worker
   simulation-worker-2: *worker
   simulation-worker-3: *worker

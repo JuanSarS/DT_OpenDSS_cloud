@@ -35,7 +35,7 @@ try {
     Run-Step "IEEE8500 API" { python .\scripts\ieee8500_api_smoke.py @common }
     Run-Step "Security tests" { python -m pytest tests\security -q }
     Run-Step "Unit tests" { python -m pytest tests\unit -q }
-
+    Run-Step "Unit tests" { python -m pytest tests -q }
     if ($Native) {
         Run-Step "QSTS native" { python .\scripts\qsts_smoke.py }
         Run-Step "IEEE8500 native" { python .\scripts\ieee8500_smoke.py }

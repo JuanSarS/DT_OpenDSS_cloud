@@ -47,7 +47,7 @@ class SimulationSummary(BaseModel):
     status: SimulationStatus
     created_at: datetime
     task_count: int
-    access_mode: Literal["owner", "viewer", "admin" "requestable",
+    access_mode: Literal["owner", "viewer", "admin", "requestable",
     "requested"] = "owner"
     owner_id: str | None = None
 

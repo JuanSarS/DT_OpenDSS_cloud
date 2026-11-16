@@ -8,14 +8,46 @@ from services.api_manager.auth import routes
 from services.api_manager.auth import dependencies
 from services.api_manager.auth.jwt import create_access_token
 from services.api_manager.platform.settings import settings
-
+from starlette.requests import Request
 
 def test_missing_token_is_rejected(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "auth_enabled", True)
-    with pytest.raises(HTTPException) as error:
-        dependencies.get_current_user(None)
-    assert error.value.status_code == 401
+    monkeypatch.setattr(
+        settings,
+        "auth_enabled",
+        True,
+    )
 
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [],
+            "query_string": b"",
+            "scheme": "http",
+            "server": (
+                "testserver",
+                80,
+            ),
+            "client": (
+                "127.0.0.1",
+                12345,
+            ),
+        }
+    )
+
+    with pytest.raises(
+        HTTPException
+    ) as error:
+        dependencies.get_current_user(
+            request,
+            None,
+        )
+
+    assert (
+        error.value.status_code
+        == 401
+    )
 
 def test_valid_token_returns_user(monkeypatch) -> None:
     monkeypatch.setattr(settings, "auth_enabled", True)

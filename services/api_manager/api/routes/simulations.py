@@ -402,17 +402,18 @@ async def simulation_websocket(websocket: WebSocket, session_id: str) -> None:
                     selected_subprotocol = (
                         "opendss.jwt"
                     )
-        protocols = [item.strip() for item in websocket.headers.get("sec-websocket-protocol", "").split(",")]
-        if "opendss.jwt" in protocols:
-            index = protocols.index("opendss.jwt")
-            if index + 1 < len(protocols):
-                token = protocols[index + 1]
-        user = get_user_from_token(token or "")
+
+        user = get_user_from_token(
+            token or ""
+        )
+
         await simulation_service.subscribe(
             session_id,
             websocket,
             user_id=user.username,
-            is_admin=user.role == "admin",
+            is_admin=(
+                user.role == "admin"
+            ),
             subprotocol=selected_subprotocol,
         )
         while True:
