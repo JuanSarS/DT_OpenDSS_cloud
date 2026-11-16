@@ -7,6 +7,7 @@ __pycache__
 .cache
 .env
 data/runtime
+secrets
 .idea
 .vscode
 tests

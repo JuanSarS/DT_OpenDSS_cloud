@@ -8,9 +8,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.adapters.opendss.engine import OpenDSSContextEngine
-from app.adapters.opendss.topology_catalog import resolve_topology
-from app.domain.models import QSTSConfig
+from packages.simulation_core.engine import OpenDSSContextEngine
+from packages.simulation_core.topology_catalog import resolve_builtin_topology
+from packages.contracts.models import QSTSConfig
 
 
 EVIDENCE_DIR = PROJECT_ROOT / "docs" / "evidence" / "qsts"
@@ -68,7 +68,7 @@ def main() -> None:
         step_minutes=args.step_minutes,
         profile_source=args.profile_source,
     )
-    engine = OpenDSSContextEngine(resolve_topology("ieee123"), load_multiplier=1.0)
+    engine = OpenDSSContextEngine( resolve_builtin_topology("ieee123"), load_multiplier=1.0)
     try:
         print("========================================")
         print(" OpenDSS QSTS Local Test")
