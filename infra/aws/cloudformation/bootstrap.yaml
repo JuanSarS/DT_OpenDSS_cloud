@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Bootstrap efimero de OpenDSS Cloud. Crea repositorios ECR y secretos base.
+  Este stack se elimina al desmontar completamente el laboratorio.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: opendss-thesis
+    AllowedPattern: '[a-z0-9-]+'
+
+Resources:
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${ProjectName}-api-manager'
+      EmptyOnDelete: true
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WorkerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${ProjectName}-simulation-worker'
+      EmptyOnDelete: true
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  JwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: JWT signing secret for OpenDSS Cloud
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WorkerSharedTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Internal API-to-worker bearer token for OpenDSS Cloud
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AuthUsersSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Argon2-hashed local user directory for OpenDSS Cloud
+      SecretString: '{}'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  ApiRepositoryUri:
+    Value: !GetAtt ApiRepository.RepositoryUri
+  WorkerRepositoryUri:
+    Value: !GetAtt WorkerRepository.RepositoryUri
+  JwtSecretArn:
+    Value: !Ref JwtSecret
+  WorkerSharedTokenSecretArn:
+    Value: !Ref WorkerSharedTokenSecret
+  AuthUsersSecretArn:
+    Value: !Ref AuthUsersSecret

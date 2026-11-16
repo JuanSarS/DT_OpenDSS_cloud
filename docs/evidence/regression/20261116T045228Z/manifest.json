@@ -1,0 +1,62 @@
+﻿[
+    {
+        "name":  "Compile",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:37.3140373Z",
+        "ended_utc":  "2026-11-16T04:52:37.5602181Z"
+    },
+    {
+        "name":  "Compose config",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:37.5652159Z",
+        "ended_utc":  "2026-11-16T04:52:37.8520455Z"
+    },
+    {
+        "name":  "Contracts",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:37.8550462Z",
+        "ended_utc":  "2026-11-16T04:52:38.3957843Z"
+    },
+    {
+        "name":  "Snapshot + WSS",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:38.3957843Z",
+        "ended_utc":  "2026-11-16T04:52:41.3208181Z"
+    },
+    {
+        "name":  "QSTS REST",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:41.4033115Z",
+        "ended_utc":  "2026-11-16T04:52:44.2761082Z"
+    },
+    {
+        "name":  "QSTS WSS",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:44.2761082Z",
+        "ended_utc":  "2026-11-16T04:52:46.2776341Z"
+    },
+    {
+        "name":  "IEEE8500 API",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:46.2811568Z",
+        "ended_utc":  "2026-11-16T04:52:53.4043204Z"
+    },
+    {
+        "name":  "Security tests",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:53.4087273Z",
+        "ended_utc":  "2026-11-16T04:52:59.8006145Z"
+    },
+    {
+        "name":  "Execution/contract unit tests",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:52:59.8049127Z",
+        "ended_utc":  "2026-11-16T04:53:05.3341261Z"
+    },
+    {
+        "name":  "Full pytest",
+        "exit_code":  0,
+        "started_utc":  "2026-11-16T04:53:05.3391495Z",
+        "ended_utc":  "2026-11-16T04:53:13.9249002Z"
+    }
+]

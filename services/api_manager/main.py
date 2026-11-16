@@ -51,6 +51,7 @@ from services.api_manager.security.events import (
     record_security_event,
 )
 from services.api_manager.security.rate_limit import rate_limiter
+from services.api_manager.security.proxy import external_client_ip
 
 configure_logging()
 
@@ -70,7 +71,10 @@ async def rate_limit_requests(request: Request, call_next):
         or request.url.path.startswith("/static")
     ):
         return await call_next(request)
-    key = request.client.host if request.client else "unknown"
+    key = external_client_ip(
+        request.headers,
+        request.client.host if request.client else "unknown",
+    )
     retry_after = rate_limiter.check(
         f"request:{key}",
         settings.rate_limit_requests,

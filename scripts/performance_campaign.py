@@ -4,14 +4,19 @@ import argparse
 import asyncio
 import csv
 import json
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 
-import httpx
 import websockets
+
+from smoke_common import (
+    add_common_args,
+    open_authenticated_client,
+    websocket_base,
+    websocket_ssl_context,
+)
 
 
 def percentile(values: list[float], level: float) -> float:
@@ -41,8 +46,8 @@ def statistics(values: list[float]) -> dict[str, float | int]:
 
 
 def arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Campaña reproducible REST/WebSocket.")
-    parser.add_argument("--base-url", required=True)
+    parser = argparse.ArgumentParser(description="Campaña reproducible REST/WebSocket autenticada.")
+    add_common_args(parser)
     parser.add_argument("--environment", required=True)
     parser.add_argument("--model", default="ieee123")
     parser.add_argument("--simulation", choices=("snapshot", "qsts"), default="qsts")
@@ -50,6 +55,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--duration-hours", type=float, default=24.0)
     parser.add_argument("--step-minutes", type=float, default=5.0)
     parser.add_argument("--profile", default="synthetic_daily")
+    parser.add_argument("--output-root", default="docs/evidence/performance")
     return parser.parse_args()
 
 
@@ -57,10 +63,10 @@ async def campaign(args: argparse.Namespace) -> None:
     if args.iterations < 1:
         raise ValueError("--iterations debe ser mayor que cero")
     base_url = args.base_url.rstrip("/")
-    ws_base_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
+    ws_base_url = websocket_base(base_url)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = f"{timestamp}_{args.environment}_{args.model}_{args.simulation}"
-    evidence_dir = Path("docs") / "evidence" / "performance" / run_id
+    evidence_dir = Path(args.output_root) / run_id
     evidence_dir.mkdir(parents=True, exist_ok=False)
     config = {
         "timestamp": timestamp,
@@ -73,12 +79,18 @@ async def campaign(args: argparse.Namespace) -> None:
         "duration_hours": args.duration_hours,
         "step_minutes": args.step_minutes,
         "profile": args.profile,
+        "username": args.username,
     }
-    (evidence_dir / "config.json").write_text(
-        json.dumps(config, indent=2), encoding="utf-8"
-    )
+    (evidence_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=300.0) as client:
+    client, token = await open_authenticated_client(
+        base_url=base_url,
+        username=args.username,
+        ca_cert=args.ca_cert,
+        insecure=args.insecure,
+        timeout=300.0,
+    )
+    try:
         metrics_before = (await client.get("/metrics")).json()
         (evidence_dir / "metrics_before.json").write_text(
             json.dumps(metrics_before, indent=2), encoding="utf-8"
@@ -102,11 +114,13 @@ async def campaign(args: argparse.Namespace) -> None:
                 ws_started = time.perf_counter()
                 async with websockets.connect(
                     f"{ws_base_url}/ws/simulations/{session_id}",
+                    ssl=websocket_ssl_context(base_url, args.ca_cert, args.insecure),
+                    subprotocols=["opendss.jwt", token],
                     max_size=16 * 1024 * 1024,
                 ) as websocket:
                     await websocket.recv()
                     row["ws_connect_ms"] = (time.perf_counter() - ws_started) * 1000
-                    payload = {"simulation_type": args.simulation}
+                    payload: dict = {"simulation_type": args.simulation}
                     if args.simulation == "qsts":
                         payload["qsts"] = {
                             "duration_hours": args.duration_hours,
@@ -147,9 +161,7 @@ async def campaign(args: argparse.Namespace) -> None:
                         (result_time - solve_started) * 1000 if result_time else None
                     )
                     row["ws_completed_ms"] = (
-                        (completed_time - solve_started) * 1000
-                        if completed_time
-                        else None
+                        (completed_time - solve_started) * 1000 if completed_time else None
                     )
 
                 started = time.perf_counter()
@@ -165,7 +177,7 @@ async def campaign(args: argparse.Namespace) -> None:
                     started = time.perf_counter()
                     deleted = await client.delete(f"/simulations/{session_id}")
                     row["delete_ms"] = (time.perf_counter() - started) * 1000
-                    if deleted.status_code != 204:
+                    if deleted.status_code not in {204, 404}:
                         row["status"] = "error"
                         row["errors"] = 1
             rows.append(row)
@@ -175,6 +187,8 @@ async def campaign(args: argparse.Namespace) -> None:
         (evidence_dir / "metrics_after.json").write_text(
             json.dumps(metrics_after, indent=2), encoding="utf-8"
         )
+    finally:
+        await client.aclose()
 
     fields = sorted({key for row in rows for key in row})
     with (evidence_dir / "raw_results.csv").open("w", newline="", encoding="utf-8") as file:
@@ -185,9 +199,7 @@ async def campaign(args: argparse.Namespace) -> None:
         **config,
         "errors": sum(row["errors"] for row in rows),
         "operations": {
-            key: statistics(
-                [float(row[key]) for row in rows if row.get(key) is not None]
-            )
+            key: statistics([float(row[key]) for row in rows if row.get(key) is not None])
             for key in (
                 "health_ms",
                 "create_ms",
@@ -201,9 +213,7 @@ async def campaign(args: argparse.Namespace) -> None:
             )
         },
     }
-    (evidence_dir / "summary.json").write_text(
-        json.dumps(summary, indent=2), encoding="utf-8"
-    )
+    (evidence_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     print(f"Evidence: {evidence_dir}")
 

@@ -10,6 +10,22 @@ class SimulationUser(HttpUser):
     wait_time = between(0.2, 0.8)
     model = os.getenv("OPENDSS_LOAD_MODEL", "ieee123")
 
+    def on_start(self) -> None:
+        username = os.getenv("OPENDSS_LOAD_USERNAME", "admin")
+        password = os.getenv("OPENDSS_LOAD_PASSWORD")
+        if not password:
+            raise RuntimeError("OPENDSS_LOAD_PASSWORD es obligatorio para Locust")
+        response = self.client.post(
+            "/auth/token",
+            data={"username": username, "password": password},
+            name="POST /auth/token",
+        )
+        if response.status_code != 200:
+            response.failure(f"login failed: {response.status_code}")
+            raise RuntimeError("No fue posible autenticar usuario Locust")
+        token = response.json()["access_token"]
+        self.client.headers.update({"Authorization": f"Bearer {token}"})
+
     def _create(self) -> str | None:
         response = self.client.post(
             "/simulations",
@@ -26,7 +42,7 @@ class SimulationUser(HttpUser):
             f"/simulations/{session_id}",
             name="DELETE /simulations/{session_id}",
         )
-        if response.status_code != 204:
+        if response.status_code not in {204, 404}:
             response.failure(f"deletion failed: {response.status_code}")
 
 
@@ -39,6 +55,7 @@ class SnapshotUser(SimulationUser):
         try:
             response = self.client.post(
                 f"/simulations/{session_id}/solve",
+                json={"simulation_type": "snapshot"},
                 name="POST /simulations/{session_id}/solve snapshot",
             )
             if response.status_code != 200 or not response.json().get("converged"):

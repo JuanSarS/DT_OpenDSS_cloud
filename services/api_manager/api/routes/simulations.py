@@ -37,6 +37,7 @@ from services.api_manager.security.events import (
 )
 from services.api_manager.platform.settings import settings
 from services.api_manager.security.rate_limit import rate_limiter
+from services.api_manager.security.proxy import external_client_ip
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 websocket_router = APIRouter(prefix="/ws/simulations", tags=["simulations"])
@@ -359,7 +360,10 @@ async def solve_simulation(
 async def simulation_websocket(websocket: WebSocket, session_id: str) -> None:
     try:
         if settings.rate_limit_enabled:
-            client_ip = websocket.client.host if websocket.client else "unknown"
+            client_ip = external_client_ip(
+                websocket.headers,
+                websocket.client.host if websocket.client else "unknown",
+            )
             retry_after = rate_limiter.check(
                 f"ws:{client_ip}",
                 settings.rate_limit_requests,

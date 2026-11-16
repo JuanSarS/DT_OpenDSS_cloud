@@ -9,6 +9,10 @@ from packages.contracts.execution import ExecutorSessionInfo, ProgressHandler
 from packages.contracts.jobs import JobStatus, SimulationJob
 from packages.contracts.results import SimulationResult
 from services.api_manager.execution.remote_executor import RemoteSimulationExecutor
+from services.api_manager.execution.worker_discovery import (
+    StaticWorkerDiscovery,
+    WorkerDiscovery,
+)
 from services.api_manager.platform.settings import settings
 from services.api_manager.security.events import (
     SecurityEvent,
@@ -28,18 +32,17 @@ class WorkerBinding:
 class WorkerPoolSimulationExecutor:
     def __init__(
         self,
-        endpoints: list[str],
+        endpoints: list[str] | None = None,
         *,
+        discovery: WorkerDiscovery | None = None,
         timeout_seconds: float,
     ) -> None:
-        self._endpoints = [endpoint.rstrip("/") for endpoint in endpoints if endpoint]
-        self._clients = {
-            endpoint: RemoteSimulationExecutor(
-                base_url=endpoint,
-                timeout_seconds=timeout_seconds,
-            )
-            for endpoint in self._endpoints
-        }
+        if discovery is None:
+            discovery = StaticWorkerDiscovery(endpoints or [])
+        self._discovery = discovery
+        self._timeout_seconds = timeout_seconds
+        self._endpoints: list[str] = []
+        self._clients: dict[str, RemoteSimulationExecutor] = {}
         self._bindings: dict[str, WorkerBinding] = {}
         self._job_bindings: dict[str, str] = {}
         self._unhealthy: set[str] = set()
@@ -48,19 +51,52 @@ class WorkerPoolSimulationExecutor:
         self._worker_failures = 0
         self._job_retries = 0
 
-    async def _choose_worker(self, exclude: str | None = None) -> str:
+    async def _sync_workers(self, *, force: bool = False) -> list[str]:
+        discovered = [
+            endpoint.rstrip("/")
+            for endpoint in await self._discovery.endpoints(force=force)
+            if endpoint
+        ]
+        if not discovered:
+            raise RuntimeError("Worker discovery no devolvió endpoints")
+
+        async with self._lock:
+            for endpoint in discovered:
+                if endpoint not in self._clients:
+                    self._clients[endpoint] = RemoteSimulationExecutor(
+                        base_url=endpoint,
+                        timeout_seconds=self._timeout_seconds,
+                    )
+            self._endpoints = list(dict.fromkeys(discovered))
+            self._unhealthy.intersection_update(self._clients.keys())
+            return list(self._endpoints)
+
+    async def _choose_worker(
+        self,
+        exclude: set[str] | None = None,
+    ) -> str:
+        await self._sync_workers()
+        excluded = exclude or set()
         async with self._lock:
             candidates = [
-                endpoint for endpoint in self._endpoints
-                if endpoint != exclude
+                endpoint
+                for endpoint in self._endpoints
+                if endpoint not in excluded
+                and endpoint not in self._unhealthy
             ]
             if not candidates:
-                raise RuntimeError("No hay workers disponibles")
-            healthy = [endpoint for endpoint in candidates if endpoint not in self._unhealthy]
-            if not healthy:
                 raise RuntimeError("No hay workers saludables disponibles")
-            candidates = healthy
-            endpoint = candidates[self._cursor % len(candidates)]
+
+            counts = {endpoint: 0 for endpoint in candidates}
+            for binding in self._bindings.values():
+                if binding.endpoint in counts:
+                    counts[binding.endpoint] += 1
+
+            minimum = min(counts.values())
+            least_loaded = [
+                endpoint for endpoint, count in counts.items() if count == minimum
+            ]
+            endpoint = least_loaded[self._cursor % len(least_loaded)]
             self._cursor += 1
             return endpoint
 
@@ -74,28 +110,48 @@ class WorkerPoolSimulationExecutor:
             self._worker_failures += 1
 
     async def prepare_session(
-        self, *, session_id: str, topology: str, load_multiplier: float
+        self,
+        *,
+        session_id: str,
+        topology: str,
+        load_multiplier: float,
     ) -> ExecutorSessionInfo:
-        endpoint = await self._choose_worker()
-        info = await self._clients[endpoint].prepare_session(
-            session_id=session_id,
-            topology=topology,
-            load_multiplier=load_multiplier,
-        )
-        async with self._lock:
-            self._bindings[session_id] = WorkerBinding(
-                endpoint=endpoint,
-                topology=topology,
-                load_multiplier=load_multiplier,
-            )
-        return ExecutorSessionInfo(
-            session_id=info.session_id,
-            topology=info.topology,
-            model_summary=info.model_summary,
-            task_count=info.task_count,
-            runtime_identity=endpoint,
-            load_multiplier=info.load_multiplier,
-        )
+        await self._sync_workers(force=True)
+        attempted: set[str] = set()
+        last_error: Exception | None = None
+
+        for _ in range(max(len(self._endpoints), 1)):
+            endpoint = await self._choose_worker(attempted)
+            attempted.add(endpoint)
+            try:
+                info = await self._clients[endpoint].prepare_session(
+                    session_id=session_id,
+                    topology=topology,
+                    load_multiplier=load_multiplier,
+                )
+                async with self._lock:
+                    self._bindings[session_id] = WorkerBinding(
+                        endpoint=endpoint,
+                        topology=topology,
+                        load_multiplier=load_multiplier,
+                    )
+                return ExecutorSessionInfo(
+                    session_id=info.session_id,
+                    topology=info.topology,
+                    model_summary=info.model_summary,
+                    task_count=info.task_count,
+                    runtime_identity=endpoint,
+                    load_multiplier=info.load_multiplier,
+                )
+            except Exception as exc:
+                last_error = exc
+                if not self._recoverable(exc):
+                    raise
+                await self._mark_unhealthy(endpoint)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("No fue posible preparar la sesión en ningún worker")
 
     def _binding(self, session_id: str) -> WorkerBinding:
         try:
@@ -125,50 +181,70 @@ class WorkerPoolSimulationExecutor:
         progress_handler: ProgressHandler | None = None,
     ) -> SimulationResult:
         binding = self._binding(job.session_id)
-        client = self._clients[binding.endpoint]
+        current_endpoint = binding.endpoint
+        self._job_bindings[job.job_id] = current_endpoint
+
         try:
-            self._job_bindings[job.job_id] = binding.endpoint
-            return await client.submit(job, progress_handler)
+            return await self._clients[current_endpoint].submit(job, progress_handler)
         except Exception as exc:
             if not settings.worker_retry_enabled or not self._recoverable(exc):
                 raise
-            last_error = exc
-            for _ in range(settings.worker_max_retries):
-                await self._mark_unhealthy(binding.endpoint)
-                record_security_event(
-                    SecurityEvent.WORKER_LOST.value,
-                    detail=binding.endpoint,
+            last_error: Exception = exc
+
+        failed_endpoints: set[str] = {current_endpoint}
+        for retry_index in range(settings.worker_max_retries):
+            await self._mark_unhealthy(current_endpoint)
+            record_security_event(
+                SecurityEvent.WORKER_LOST.value,
+                detail=current_endpoint,
+            )
+            await asyncio.sleep(settings.worker_retry_backoff_seconds)
+            await self._sync_workers(force=True)
+
+            try:
+                endpoint = await self._choose_worker(failed_endpoints)
+                await self._clients[endpoint].prepare_session(
+                    session_id=job.session_id,
+                    topology=binding.topology,
+                    load_multiplier=binding.load_multiplier,
                 )
-                await asyncio.sleep(settings.worker_retry_backoff_seconds)
-                try:
-                    endpoint = await self._choose_worker(binding.endpoint)
-                    await self._clients[endpoint].prepare_session(
-                        session_id=job.session_id,
+                async with self._lock:
+                    self._bindings[job.session_id] = WorkerBinding(
+                        endpoint=endpoint,
                         topology=binding.topology,
                         load_multiplier=binding.load_multiplier,
                     )
-                    async with self._lock:
-                        self._bindings[job.session_id] = WorkerBinding(
-                            endpoint=endpoint,
-                            topology=binding.topology,
-                            load_multiplier=binding.load_multiplier,
-                        )
-                        self._job_retries += 1
-                    record_security_event(
-                        SecurityEvent.JOB_RETRY.value,
-                        detail=endpoint,
-                    )
-                    retry_job = job.model_copy(
-                        update={"attempt": job.attempt + 1}
-                    )
-                    self._job_bindings[retry_job.job_id] = endpoint
+                    self._job_retries += 1
+
+                record_security_event(
+                    SecurityEvent.JOB_RETRY.value,
+                    detail=f"{current_endpoint} -> {endpoint}",
+                )
+
+                retry_job = job.model_copy(
+                    update={"attempt": job.attempt + retry_index + 1}
+                )
+                self._job_bindings[retry_job.job_id] = endpoint
+                try:
                     return await self._clients[endpoint].submit(
                         retry_job,
                         progress_handler,
                     )
-                except Exception as retry_error:
-                    last_error = retry_error
-            raise last_error
+                except Exception as retry_submit_error:
+                    if not self._recoverable(retry_submit_error):
+                        raise
+                    last_error = retry_submit_error
+                    current_endpoint = endpoint
+                    failed_endpoints.add(endpoint)
+            except Exception as retry_error:
+                if not self._recoverable(retry_error):
+                    raise
+                last_error = retry_error
+                if "endpoint" in locals():
+                    current_endpoint = endpoint
+                    failed_endpoints.add(endpoint)
+
+        raise last_error
 
     async def status(self, job_id: str) -> JobStatus:
         endpoint = self._job_bindings[job_id]
@@ -192,14 +268,20 @@ class WorkerPoolSimulationExecutor:
 
     async def close_session(self, session_id: str) -> None:
         binding = self._binding(session_id)
-        await self._clients[binding.endpoint].close_session(session_id)
-        async with self._lock:
-            self._bindings.pop(session_id, None)
+        try:
+            await self._clients[binding.endpoint].close_session(session_id)
+        except Exception as exc:
+            if not self._recoverable(exc):
+                raise
+        finally:
+            async with self._lock:
+                self._bindings.pop(session_id, None)
 
     async def health_probe(self) -> dict[str, object]:
+        await self._sync_workers(force=True)
         healthy = 0
         states: dict[str, bool] = {}
-        for endpoint in self._endpoints:
+        for endpoint in list(self._endpoints):
             try:
                 async with httpx.AsyncClient(
                     base_url=endpoint,
@@ -209,10 +291,16 @@ class WorkerPoolSimulationExecutor:
                     response.raise_for_status()
                 states[endpoint] = True
                 healthy += 1
-                self._unhealthy.discard(endpoint)
+                async with self._lock:
+                    self._unhealthy.discard(endpoint)
+                    for binding in self._bindings.values():
+                        if binding.endpoint == endpoint:
+                            binding.healthy = True
             except httpx.HTTPError:
                 states[endpoint] = False
-                self._unhealthy.add(endpoint)
+                async with self._lock:
+                    self._unhealthy.add(endpoint)
+
         return {
             "worker_count": len(self._endpoints),
             "healthy_workers": healthy,

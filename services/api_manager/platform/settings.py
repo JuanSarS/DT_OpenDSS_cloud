@@ -21,6 +21,11 @@ class Settings(BaseModel):
     "http://127.0.0.1:8100"
     )
     simulation_worker_urls: str = ""
+    worker_discovery_backend: str = "static"
+    worker_discovery_host: str = "simulation-worker.opendss.local"
+    worker_discovery_port: int = 8100
+    worker_discovery_scheme: str = "http"
+    worker_discovery_refresh_seconds: float = 5.0
 
     simulation_worker_timeout_seconds: float = (
         600.0
@@ -61,6 +66,11 @@ class Settings(BaseModel):
             "cors_origins": "",
             "simulation_worker_url": "http://127.0.0.1:8100",
             "simulation_worker_urls": "",
+            "worker_discovery_backend": "static",
+            "worker_discovery_host": "simulation-worker.opendss.local",
+            "worker_discovery_port": 8100,
+            "worker_discovery_scheme": "http",
+            "worker_discovery_refresh_seconds": 5.0,
             "simulation_worker_timeout_seconds": 600.0,
             "jwt_expire_minutes": 30,
             "jwt_issuer": "opendss-cloud",
@@ -89,6 +99,11 @@ class Settings(BaseModel):
             "cors_origins": "CORS_ORIGINS",
             "simulation_worker_url": "SIMULATION_WORKER_URL",
             "simulation_worker_urls": "SIMULATION_WORKER_URLS",
+            "worker_discovery_backend": "WORKER_DISCOVERY_BACKEND",
+            "worker_discovery_host": "WORKER_DISCOVERY_HOST",
+            "worker_discovery_port": "WORKER_DISCOVERY_PORT",
+            "worker_discovery_scheme": "WORKER_DISCOVERY_SCHEME",
+            "worker_discovery_refresh_seconds": "WORKER_DISCOVERY_REFRESH_SECONDS",
             "simulation_worker_timeout_seconds": "SIMULATION_WORKER_TIMEOUT_SECONDS",
             "jwt_expire_minutes": "JWT_EXPIRE_MINUTES", "jwt_issuer": "JWT_ISSUER", "jwt_audience": "JWT_AUDIENCE",
             "auth_enabled": "AUTH_ENABLED",
@@ -125,12 +140,14 @@ class Settings(BaseModel):
             "login_rate_limit_window_seconds",
             "worker_max_retries",
             "worker_test_progress_delay_ms",
+            "worker_discovery_port",
         ):
             defaults[field_name] = int(defaults[field_name])
         defaults["allow_custom_models"] = str(defaults["allow_custom_models"]).lower() not in {"0", "false", "no"}
         for field_name in ("auth_enabled", "admission_control_enabled", "rate_limit_enabled", "worker_retry_enabled"):
             defaults[field_name] = str(defaults[field_name]).lower() not in {"0", "false", "no"}
         defaults["worker_retry_backoff_seconds"] = float(defaults["worker_retry_backoff_seconds"])
+        defaults["worker_discovery_refresh_seconds"] = float(defaults["worker_discovery_refresh_seconds"])
         defaults["custom_models_dir"] = Path(defaults["custom_models_dir"])
         super().__init__(**defaults)
 

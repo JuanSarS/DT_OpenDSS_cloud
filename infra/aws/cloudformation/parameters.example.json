@@ -1,0 +1,20 @@
+{
+  "ProjectName": "opendss-thesis",
+  "WorkerDesiredCount": 3,
+  "WorkerMinCount": 1,
+  "WorkerMaxCount": 6,
+  "WorkerCpuTarget": 60,
+  "ApiCpu": "512",
+  "ApiMemory": "1024",
+  "WorkerCpu": "1024",
+  "WorkerMemory": "2048",
+  "MaxConcurrentSimulationsPerUser": 2,
+  "MaxConcurrentJobs": 8,
+  "AdmissionControlEnabled": "true",
+  "RateLimitEnabled": "true",
+  "RateLimitRequests": 120,
+  "WorkerMaxRetries": 2,
+  "WorkerRetryBackoffSeconds": 2,
+  "WorkerTestProgressDelayMs": 0,
+  "LogRetentionDays": 7
+}

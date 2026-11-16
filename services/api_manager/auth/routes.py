@@ -16,6 +16,7 @@ from services.api_manager.auth.constants import (
     ACCESS_COOKIE_NAME,
 )
 from services.api_manager.security.rate_limit import rate_limiter
+from services.api_manager.security.proxy import external_client_ip, external_is_https
 
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,10 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> TokenResponse:
     settings_value = settings
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = external_client_ip(
+        request.headers,
+        request.client.host if request.client else "unknown",
+    )
     retry_after = rate_limiter.check(
         f"login:{client_ip}",
         settings_value.login_rate_limit_requests,
@@ -85,7 +89,7 @@ async def login(
         value=access_token,
         max_age=expires_in,
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=external_is_https(request.headers, request.url.scheme),
         samesite="strict",
         path="/",
     )

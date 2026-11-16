@@ -885,7 +885,7 @@ Worker failure, retry/reassignment y métricas.
 
 ## R9 — Infraestructura AWS
 
-Terraform para ECR, IAM, red, ECS/Fargate, S3, CloudWatch, secretos y orquestación.
+CloudFormation para ECR, IAM, VPC/SG, ECS/Fargate, Cloud Map, EFS, CloudFront/ALB, CloudWatch, Secrets Manager y auto scaling.
 
 ## R10 — Despliegue cloud
 
@@ -940,13 +940,13 @@ El proyecto se considera listo cuando:
 7. Un QSTS dependiente completo permanece en un worker.
 8. Paralelización entre jobs/escenarios.
 9. Infraestructura AWS declarativa.
-10. Terraform recomendado.
-11. ECS/Fargate recomendado para workers bajo demanda.
+10. AWS CloudFormation es el IaC definitivo del laboratorio AWS.
+11. ECS/Fargate para API (1 task inicial) y un worker service con N tasks.
 12. ECR para imágenes.
-13. S3 para resultados grandes.
+13. EFS para modelos custom compartidos; S3 queda opcional para resultados grandes futuros.
 14. CloudWatch para logs/métricas.
 15. JWT y ownership antes del cierre.
-16. TLS/WSS queda pendiente si implica costo.
+16. TLS/WSS implementado localmente con Caddy y en AWS mediante CloudFront HTTPS/WSS con certificado predeterminado.
 17. HIL fuera de alcance.
 
 ---
@@ -967,3 +967,30 @@ ORGANIZAR
 ```
 
 El motor eléctrico ya funciona. El trabajo restante es principalmente arquitectura, operación, seguridad, resiliencia, despliegue y evidencia.
+
+
+---
+
+# 32. Actualización final para AWS one-click
+
+Estado de cierre previo a cloud:
+
+- API Manager seguro, ownership/viewers y JWT: implementado.
+- Pool de N workers y afinidad de sesión: implementado.
+- Retry/failover: implementado.
+- HTTPS/WSS local: Caddy.
+- AWS entrypoint: CloudFront `*.cloudfront.net`, evitando dominio/ACM manual para el laboratorio efímero.
+- Origen: ALB restringido a la managed prefix list de CloudFront.
+- API AWS: ECS/Fargate desiredCount=1 porque el estado lógico/WebSocket continúa en memoria.
+- Workers AWS: un ECS service con N tasks.
+- Discovery AWS: Cloud Map DNS `simulation-worker.opendss.local` + `DnsWorkerDiscovery`.
+- Custom models: EFS compartido en `/app/data/runtime/custom_models`.
+- Images: ECR, tag Git SHA.
+- Secrets: Secrets Manager.
+- Logs: CloudWatch.
+- Auto scaling workers: CPU scale-out-only; scale-in automático deshabilitado para no matar contextos stateful activos.
+- IaC: CloudFormation en dos stacks, `bootstrap` y `main`.
+- Operación objetivo: `scripts/deploy_cloud.ps1` crea todo y `scripts/destroy_cloud.ps1` elimina todo.
+- Evidencia reproducible: `docs/evidence/` organizada por entregable y timestamp.
+
+Advertencia académica: el texto recibido del Entregable 2 menciona literalmente Google Cloud Platform, mientras la implementación final es AWS. Se requiere aprobación de cambio de proveedor o ajuste de redacción antes de declarar cumplimiento literal.

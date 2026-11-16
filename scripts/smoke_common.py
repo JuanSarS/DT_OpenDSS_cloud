@@ -12,7 +12,7 @@ import httpx
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--base-url", default="https://localhost:8443")
     parser.add_argument("--username", default=os.getenv("OPENDSS_SMOKE_USERNAME", "admin"))
-    parser.add_argument("--ca-cert", default=os.getenv("OPENDSS_CA_CERT", "secrets/local/root.crt"))
+    parser.add_argument("--ca-cert", default=os.getenv("OPENDSS_CA_CERT", ""))
     parser.add_argument("--insecure", action="store_true", help="Solo diagnostico local: no verifica TLS")
 
 
@@ -21,10 +21,12 @@ def ssl_context(base_url: str, ca_cert: str, insecure: bool) -> ssl.SSLContext |
         return True
     if insecure:
         return ssl._create_unverified_context()
+    if not ca_cert:
+        return ssl.create_default_context()
     path = Path(ca_cert)
     if not path.exists():
         raise FileNotFoundError(
-            f"No existe la CA local: {path}. Ejecuta scripts/trust_local_ca.ps1 primero."
+            f"No existe la CA indicada: {path}."
         )
     return ssl.create_default_context(cafile=str(path))
 
