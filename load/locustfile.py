@@ -27,48 +27,112 @@ class SimulationUser(HttpUser):
         self.client.headers.update({"Authorization": f"Bearer {token}"})
 
     def _create(self) -> str | None:
-        response = self.client.post(
+        with self.client.post(
             "/simulations",
             json={"topology": self.model},
             name="POST /simulations",
-        )
-        if response.status_code != 201:
-            response.failure(f"creation failed: {response.status_code}")
-            return None
-        return response.json()["session_id"]
+            catch_response=True,
+        ) as response:
+
+            if response.status_code != 201:
+                response.failure(
+                    f"creation failed HTTP {response.status_code}: "
+                    f"{self._response_detail(response)}"
+                )
+                return None
+
+            try:
+                payload = response.json()
+            except ValueError:
+                response.failure(
+                    "creation returned invalid JSON: "
+                    f"{self._response_detail(response)}"
+                )
+                return None
+
+            session_id = payload.get("session_id")
+
+            if not session_id:
+                response.failure(
+                    "creation response has no session_id"
+                )
+                return None
+
+            return session_id
 
     def _delete(self, session_id: str) -> None:
-        response = self.client.delete(
+        with self.client.delete(
             f"/simulations/{session_id}",
             name="DELETE /simulations/{session_id}",
-        )
-        if response.status_code not in {204, 404}:
-            response.failure(f"deletion failed: {response.status_code}")
+            catch_response=True,
+        ) as response:
 
-
-class SnapshotUser(SimulationUser):
-    @task
-    def snapshot(self) -> None:
-        session_id = self._create()
-        if session_id is None:
-            return
+            if response.status_code != 204:
+                response.failure(
+                    f"deletion failed HTTP {response.status_code}: "
+                    f"{self._response_detail(response)}"
+                )
+    def _response_detail(self, response) -> str:
         try:
-            response = self.client.post(
-                f"/simulations/{session_id}/solve",
-                json={"simulation_type": "snapshot"},
-                name="POST /simulations/{session_id}/solve snapshot",
-            )
-            if response.status_code != 200 or not response.json().get("converged"):
-                response.failure("snapshot did not converge")
+            text = response.text or ""
+        except Exception:
+            text = ""
+
+        text = " ".join(text.split())
+
+        if len(text) > 500:
+            text = text[:500] + "..."
+
+        return text
+@task
+def snapshot(self) -> None:
+    session_id = self._create()
+
+    if session_id is None:
+        return
+
+    try:
+        with self.client.post(
+            f"/simulations/{session_id}/solve",
+            name="POST /simulations/{session_id}/solve snapshot",
+            catch_response=True,
+        ) as response:
+
+            if response.status_code != 200:
+                response.failure(
+                    f"snapshot failed HTTP {response.status_code}: "
+                    f"{self._response_detail(response)}"
+                )
                 return
-            results = self.client.get(
-                f"/simulations/{session_id}/results",
-                name="GET /simulations/{session_id}/results",
-            )
+
+            try:
+                payload = response.json()
+            except ValueError:
+                response.failure(
+                    "snapshot returned invalid JSON"
+                )
+                return
+
+            if not payload.get("converged"):
+                response.failure(
+                    "snapshot did not converge"
+                )
+                return
+
+        with self.client.get(
+            f"/simulations/{session_id}/results",
+            name="GET /simulations/{session_id}/results",
+            catch_response=True,
+        ) as results:
+
             if results.status_code != 200:
-                results.failure(f"results failed: {results.status_code}")
-        finally:
-            self._delete(session_id)
+                results.failure(
+                    f"results failed HTTP {results.status_code}: "
+                    f"{self._response_detail(results)}"
+                )
+
+    finally:
+        self._delete(session_id)
 
 
 class QSTSUser(SimulationUser):
@@ -78,10 +142,12 @@ class QSTSUser(SimulationUser):
     @task
     def qsts(self) -> None:
         session_id = self._create()
+
         if session_id is None:
             return
+
         try:
-            response = self.client.post(
+            with self.client.post(
                 f"/simulations/{session_id}/solve",
                 json={
                     "simulation_type": "qsts",
@@ -92,19 +158,43 @@ class QSTSUser(SimulationUser):
                     },
                 },
                 name="POST /simulations/{session_id}/solve qsts",
-            )
-            if response.status_code != 200:
-                response.failure(f"qsts failed: {response.status_code}")
-                return
-            summary = response.json().get("summary", {})
-            if summary.get("failed_steps", 1) != 0:
-                response.failure("qsts had failed steps")
-                return
-            results = self.client.get(
+                catch_response=True,
+            ) as response:
+
+                if response.status_code != 200:
+                    response.failure(
+                        f"qsts failed HTTP {response.status_code}: "
+                        f"{self._response_detail(response)}"
+                    )
+                    return
+
+                try:
+                    payload = response.json()
+                except ValueError:
+                    response.failure(
+                        "qsts returned invalid JSON"
+                    )
+                    return
+
+                summary = payload.get("summary", {})
+
+                if summary.get("failed_steps", 1) != 0:
+                    response.failure(
+                        f"qsts had failed steps: {summary}"
+                    )
+                    return
+
+            with self.client.get(
                 f"/simulations/{session_id}/results",
                 name="GET /simulations/{session_id}/results",
-            )
-            if results.status_code != 200:
-                results.failure(f"results failed: {results.status_code}")
+                catch_response=True,
+            ) as results:
+
+                if results.status_code != 200:
+                    results.failure(
+                        f"results failed HTTP {results.status_code}: "
+                        f"{self._response_detail(results)}"
+                    )
+
         finally:
             self._delete(session_id)

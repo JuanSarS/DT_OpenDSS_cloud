@@ -10,3 +10,4 @@ data/runtime/
 secrets/local/*
 !secrets/local/.gitkeep
 !secrets/README.md
+docs/evidence

@@ -1,6 +1,6 @@
 param(
     [string]$Region = "us-east-2",
-    [string]$Profile = "",
+    [string]$Profile = "opendss-deployer",
     [string]$ProjectName = "opendss-thesis"
 )
 
@@ -17,7 +17,7 @@ New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
 $AwsCommon = @("--region", $Region, "--no-cli-pager")
 if ($Profile) { $AwsCommon += @("--profile", $Profile) }
 
-function Aws {
+function Invoke-AwsCli {
     param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments)
     & aws @AwsCommon @Arguments
 }
@@ -36,22 +36,22 @@ Write-Host "Project: $ProjectName"
 Write-Host "Region:  $Region"
 Write-Host ""
 
-$identity = Aws sts get-caller-identity --output json
+$identity = Invoke-AwsCli sts get-caller-identity --output json
 if ($LASTEXITCODE -ne 0) { throw "No hay autenticacion AWS valida." }
 $identity | Set-Content -Encoding utf8 (Join-Path $EvidenceDir "aws_identity.json")
 
 if (Test-StackExists $MainStack) {
     Write-Host "[1] Guardando inventario final del stack principal"
-    Aws cloudformation describe-stack-resources --stack-name $MainStack --output json |
+    Invoke-AwsCli cloudformation describe-stack-resources --stack-name $MainStack --output json |
         Set-Content -Encoding utf8 (Join-Path $EvidenceDir "main_resources_before_delete.json")
 
     Write-Host "[2] Eliminando stack principal: $MainStack"
-    Aws cloudformation delete-stack --stack-name $MainStack
+    Invoke-AwsCli cloudformation delete-stack --stack-name $MainStack
     if ($LASTEXITCODE -ne 0) { throw "No fue posible iniciar delete-stack principal." }
     & aws @AwsCommon cloudformation wait stack-delete-complete --stack-name $MainStack
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Eventos de CloudFormation:"
-        Aws cloudformation describe-stack-events --stack-name $MainStack --output table
+        Invoke-AwsCli cloudformation describe-stack-events --stack-name $MainStack --output table
         throw "El stack principal no pudo eliminarse completamente."
     }
 } else {
@@ -60,16 +60,16 @@ if (Test-StackExists $MainStack) {
 
 if (Test-StackExists $BootstrapStack) {
     Write-Host "[3] Guardando inventario bootstrap"
-    Aws cloudformation describe-stack-resources --stack-name $BootstrapStack --output json |
+    Invoke-AwsCli cloudformation describe-stack-resources --stack-name $BootstrapStack --output json |
         Set-Content -Encoding utf8 (Join-Path $EvidenceDir "bootstrap_resources_before_delete.json")
 
     Write-Host "[4] Eliminando bootstrap: ECR + secretos"
-    Aws cloudformation delete-stack --stack-name $BootstrapStack
+    Invoke-AwsCli cloudformation delete-stack --stack-name $BootstrapStack
     if ($LASTEXITCODE -ne 0) { throw "No fue posible iniciar delete-stack bootstrap." }
     & aws @AwsCommon cloudformation wait stack-delete-complete --stack-name $BootstrapStack
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Eventos de CloudFormation:"
-        Aws cloudformation describe-stack-events --stack-name $BootstrapStack --output table
+        Invoke-AwsCli cloudformation describe-stack-events --stack-name $BootstrapStack --output table
         throw "El bootstrap no pudo eliminarse completamente."
     }
 } else {
@@ -77,7 +77,7 @@ if (Test-StackExists $BootstrapStack) {
 }
 
 Write-Host "[5] Verificando recursos etiquetados que hayan quedado"
-$leftovers = Aws resourcegroupstaggingapi get-resources `
+$leftovers = Invoke-AwsCli resourcegroupstaggingapi get-resources `
     --tag-filters "Key=Project,Values=$ProjectName" `
     --output json
 $leftovers | Set-Content -Encoding utf8 (Join-Path $EvidenceDir "tagged_leftovers.json")

@@ -1,9 +1,64 @@
 param(
     [string]$Region = "us-east-2",
-    [string]$Profile = "",
+    [string]$Profile = "opendss-deployer",
     [string]$ProjectName = "opendss-thesis",
     [int]$LoadSeconds = 90
 )
+
+function Invoke-LocustRun {
+    param(
+        [int]$Users,
+        [string]$BaseUrl,
+        [int]$LoadSeconds,
+        [string]$CsvPrefix,
+        [string]$LogFile
+    )
+
+    $PythonExe = (Get-Command python).Source
+
+    $StdOut = "$LogFile.stdout"
+    $StdErr = "$LogFile.stderr"
+
+    $Arguments = @(
+        "-m", "locust",
+        "-f", ".\load\locustfile.py",
+        "--headless",
+        "-u", "$Users",
+        "-r", "1",
+        "-t", "${LoadSeconds}s",
+        "--host", $BaseUrl,
+        "--csv", $CsvPrefix
+    )`
+
+    Write-Host "[Locust] Ejecutando $Users usuarios durante $LoadSeconds segundos"
+
+    $Process = Start-Process `
+        -FilePath $PythonExe `
+        -ArgumentList $Arguments `
+        -NoNewWindow `
+        -PassThru `
+        -Wait `
+        -RedirectStandardOutput $StdOut `
+        -RedirectStandardError $StdErr
+
+    $ExitCode = $Process.ExitCode
+
+    if (Test-Path $StdOut) {
+        Get-Content $StdOut |
+            Tee-Object -FilePath $LogFile
+    }
+
+    if (Test-Path $StdErr) {
+        Get-Content $StdErr |
+            Tee-Object -FilePath $LogFile -Append
+    }
+
+    if ($ExitCode -ne 0) {
+        throw "Locust con $Users usuarios fallo con codigo $ExitCode. Revisa $LogFile"
+    }
+
+    Write-Host "[OK] Locust $Users usuarios"
+}
 
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -15,9 +70,9 @@ New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 
 $AwsCommon = @("--region", $Region, "--no-cli-pager")
 if ($Profile) { $AwsCommon += @("--profile", $Profile) }
-function Aws { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments); & aws @AwsCommon @Arguments }
+function Invoke-AwsCli{ param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments); & aws @AwsCommon @Arguments }
 function Output([string]$Key) {
-    return (Aws cloudformation describe-stacks --stack-name $MainStack `
+    return (Invoke-AwsCli cloudformation describe-stacks --stack-name $MainStack `
       --query "Stacks[0].Outputs[?OutputKey=='$Key'].OutputValue | [0]" --output text | Out-String).Trim()
 }
 
@@ -51,10 +106,20 @@ $Timeline = Join-Path $RunDir "autoscaling_timeline.jsonl"
 $ProfileArg = $Profile
 $monitor = Start-Job -ArgumentList $Sentinel,$Timeline,$Region,$ProfileArg,$Cluster,$WorkerService -ScriptBlock {
     param($Sentinel,$Timeline,$Region,$Profile,$Cluster,$WorkerService)
+    function Invoke-AwsCli {
+        param(
+            [Parameter(ValueFromRemainingArguments = $true)]
+            [string[]]$Arguments
+        )
+        $awsArguments = @("--region", $Region, "--no-cli-pager")
+        if ($Profile) {
+            $awsArguments += @("--profile", $Profile)
+        }
+        & aws @awsArguments @Arguments
+    }
+
     while (Test-Path $Sentinel) {
-        $args = @("--region",$Region,"--no-cli-pager")
-        if ($Profile) { $args += @("--profile",$Profile) }
-        $raw = & aws @args ecs describe-services --cluster $Cluster --services $WorkerService --output json
+        $raw = Invoke-AwsCli ecs describe-services --cluster $Cluster --services $WorkerService --output json
         if ($LASTEXITCODE -eq 0) {
             $service = ($raw | ConvertFrom-Json).services[0]
             $sample = [ordered]@{
@@ -73,16 +138,20 @@ $monitor = Start-Job -ArgumentList $Sentinel,$Timeline,$Region,$ProfileArg,$Clus
 $Start = (Get-Date).ToUniversalTime()
 try {
     Write-Host "[Locust] 5 usuarios QSTS"
-    python -m locust -f .\load\locustfile.py --headless -u 5 -r 1 -t "${LoadSeconds}s" `
-      --host $BaseUrl --csv (Join-Path $RunDir "locust_5") --csv-full-history QSTSUser `
-      2>&1 | Tee-Object -FilePath (Join-Path $RunDir "locust_5.log")
-    if ($LASTEXITCODE -ne 0) { throw "Locust 5 usuarios fallo." }
+    Invoke-LocustRun `
+    -Users 5 `
+    -BaseUrl $BaseUrl `
+    -LoadSeconds $LoadSeconds `
+    -CsvPrefix (Join-Path $RunDir "locust_5") `
+    -LogFile (Join-Path $RunDir "locust_5.log")
 
     Write-Host "[Locust] 10 usuarios QSTS"
-    python -m locust -f .\load\locustfile.py --headless -u 10 -r 2 -t "${LoadSeconds}s" `
-      --host $BaseUrl --csv (Join-Path $RunDir "locust_10") --csv-full-history QSTSUser `
-      2>&1 | Tee-Object -FilePath (Join-Path $RunDir "locust_10.log")
-    if ($LASTEXITCODE -ne 0) { throw "Locust 10 usuarios fallo." }
+    Invoke-LocustRun `
+    -Users 10 `
+    -BaseUrl $BaseUrl `
+    -LoadSeconds $LoadSeconds `
+    -CsvPrefix (Join-Path $RunDir "locust_10") `
+    -LogFile (Join-Path $RunDir "locust_10.log")
 }
 finally {
     Remove-Item $Sentinel -ErrorAction SilentlyContinue
@@ -97,7 +166,7 @@ $End = (Get-Date).ToUniversalTime()
 $StartIso = $Start.ToString("o")
 $EndIso = $End.AddMinutes(2).ToString("o")
 foreach ($metric in @("CPUUtilization","MemoryUtilization")) {
-    Aws cloudwatch get-metric-statistics `
+    Invoke-AwsCli cloudwatch get-metric-statistics `
       --namespace AWS/ECS `
       --metric-name $metric `
       --dimensions "Name=ClusterName,Value=$Cluster" "Name=ServiceName,Value=$WorkerService" `
@@ -107,7 +176,7 @@ foreach ($metric in @("CPUUtilization","MemoryUtilization")) {
       --statistics Average Maximum `
       --output json | Set-Content -Encoding utf8 (Join-Path $RunDir "cloudwatch_$metric.json")
 }
-Aws ecs describe-services --cluster $Cluster --services $WorkerService --output json |
+Invoke-AwsCli ecs describe-services --cluster $Cluster --services $WorkerService --output json |
     Set-Content -Encoding utf8 (Join-Path $RunDir "worker_service_final.json")
 
 @{

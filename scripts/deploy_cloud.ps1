@@ -1,6 +1,6 @@
 param(
     [string]$Region = "us-east-2",
-    [string]$Profile = "",
+    [string]$Profile = "opendss-deployer",
     [string]$ProjectName = "opendss-thesis",
     [int]$WorkerCount = 3,
     [int]$WorkerMinCount = 1,

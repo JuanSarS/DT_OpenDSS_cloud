@@ -1,9 +1,10 @@
 param(
     [string]$Region = "us-east-2",
-    [string]$Profile = "",
+    [string]$Profile = "opendss-deployer",
     [string]$ProjectName = "opendss-thesis",
     [string]$Username = "admin"
 )
+
 
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -15,9 +16,9 @@ New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 
 $AwsCommon = @("--region", $Region, "--no-cli-pager")
 if ($Profile) { $AwsCommon += @("--profile", $Profile) }
-function Aws { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments); & aws @AwsCommon @Arguments }
+function Invoke-AwsCli { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments); & aws @AwsCommon @Arguments }
 function Output([string]$Key) {
-    return (Aws cloudformation describe-stacks --stack-name $MainStack `
+    return (Invoke-AwsCli cloudformation describe-stacks --stack-name $MainStack `
       --query "Stacks[0].Outputs[?OutputKey=='$Key'].OutputValue | [0]" --output text | Out-String).Trim()
 }
 
@@ -68,12 +69,12 @@ try {
     $WorkerIp = $uri.Host
     Write-Host "[2] Worker propietario detectado: $WorkerIp"
 
-    $taskText = (Aws ecs list-tasks --cluster $Cluster --service-name $WorkerService `
+    $taskText = (Invoke-AwsCli ecs list-tasks --cluster $Cluster --service-name $WorkerService `
         --desired-status RUNNING --query "taskArns" --output text | Out-String).Trim()
     $taskArns = @($taskText -split "\s+" | Where-Object { $_ })
     if ($taskArns.Count -eq 0) { throw "No hay tasks worker RUNNING." }
 
-    $tasksJson = Aws ecs describe-tasks --cluster $Cluster --tasks $taskArns --output json
+    $tasksJson = Invoke-AwsCli ecs describe-tasks --cluster $Cluster --tasks $taskArns --output json
     $tasksJson | Set-Content -Encoding utf8 (Join-Path $RunDir "worker_tasks_before_kill.json")
     $tasks = ($tasksJson | ConvertFrom-Json).tasks
     $TargetTask = $null
@@ -90,18 +91,45 @@ try {
     if (-not $TargetTask) { throw "No fue posible mapear $WorkerIp a una task ECS." }
 
     Write-Host "[3] Deteniendo task para demostrar failover"
-    Aws ecs stop-task --cluster $Cluster --task $TargetTask `
+    Invoke-AwsCli ecs stop-task --cluster $Cluster --task $TargetTask `
       --reason "OpenDSS thesis resilience evidence" --output json |
       Set-Content -Encoding utf8 (Join-Path $RunDir "stopped_task.json")
 
     Write-Host "[4] Esperando final del cliente QSTS"
-    $process.WaitForExit()
-    if ($process.ExitCode -ne 0) {
-        Get-Content $Stderr -ErrorAction SilentlyContinue
-        throw "La prueba de resiliencia fallo con codigo $($process.ExitCode)."
+
+    if (-not $process) {
+        throw "No existe proceso cliente de resiliencia."
     }
 
-    Aws ecs describe-services --cluster $Cluster --services $WorkerService --output json |
+    $process.WaitForExit()
+    $process.Refresh()
+
+    $ExitCode = $process.ExitCode
+
+    Write-Host "Exit code cliente resiliencia: $ExitCode"
+
+    if ($ExitCode -ne 0) {
+
+        Write-Host ""
+        Write-Host "===== STDOUT resiliencia ====="
+
+        if (Test-Path $ClientStdout) {
+            Get-Content $ClientStdout
+        }
+
+        Write-Host ""
+        Write-Host "===== STDERR resiliencia ====="
+
+        if (Test-Path $ClientStderr) {
+            Get-Content $ClientStderr
+        }
+
+        throw "La prueba de resiliencia fallo con codigo $ExitCode."
+    }
+
+    Write-Host "[OK] Cliente QSTS de resiliencia finalizado"
+
+    Invoke-AwsCli ecs describe-services --cluster $Cluster --services $WorkerService --output json |
         Set-Content -Encoding utf8 (Join-Path $RunDir "worker_service_after_failover.json")
 
     Write-Host "[5] Ejecutando pruebas de seguridad y admision"
