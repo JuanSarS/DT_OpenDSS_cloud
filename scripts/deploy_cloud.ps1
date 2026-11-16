@@ -64,13 +64,35 @@ function Test-EcrImageExists {
         [string]$Tag
     )
 
-    & aws @AwsCommon ecr describe-images `
-        --repository-name $RepositoryName `
-        --image-ids "imageTag=$Tag" `
-        --query "imageDetails[0].imageDigest" `
-        --output text *> $null
+    # No usamos describe-images con imageTag porque AWS devuelve
+    # ImageNotFoundException cuando la imagen todavía no existe.
+    # Con $ErrorActionPreference = "Stop", PowerShell convierte ese
+    # caso esperado en una excepción y aborta el despliegue.
+    #
+    # list-images devuelve una lista vacía si el tag aún no existe.
 
-    return $LASTEXITCODE -eq 0
+    $tagsOutput = & aws @AwsCommon ecr list-images `
+        --repository-name $RepositoryName `
+        --filter "tagStatus=TAGGED" `
+        --query "imageIds[].imageTag" `
+        --output text
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "No fue posible consultar las imagenes del repositorio ECR '$RepositoryName'."
+    }
+
+    $tagsText = (
+        $tagsOutput |
+        Out-String
+    ).Trim()
+
+    if (-not $tagsText) {
+        return $false
+    }
+
+    $tags = $tagsText -split "\s+"
+
+    return $tags -contains $Tag
 }
 
 Write-Host ""
