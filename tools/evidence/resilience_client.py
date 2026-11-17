@@ -61,6 +61,18 @@ async def main_async(args: argparse.Namespace) -> None:
             while not completed:
                 event = json.loads(await asyncio.wait_for(websocket.recv(), timeout=900))
                 events.append(event)
+
+                with (output / "ws_events.jsonl").open(
+                    "a",
+                    encoding="utf-8",
+                ) as handle:
+                    handle.write(
+                        json.dumps(
+                            event,
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
                 if event.get("type") == "qsts_progress" and not first_progress_seen:
                     first_progress_seen = True
                     (output / "ready_to_kill.flag").write_text("ready\n", encoding="utf-8")
@@ -78,10 +90,6 @@ async def main_async(args: argparse.Namespace) -> None:
             "observed_restart": restarted,
             "event_types": [event.get("type") for event in events],
         }
-        (output / "ws_events.jsonl").write_text(
-            "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events),
-            encoding="utf-8",
-        )
         (output / "resilience_result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(json.dumps(result, indent=2))
     finally:

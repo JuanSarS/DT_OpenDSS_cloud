@@ -357,7 +357,7 @@ if ($PerformanceMode) {
 }
 
 if ($ResilienceMode) {
-    $WorkerDelay = 75
+    $WorkerDelay = 35
 }
 
 Write-Host "[10] Validando plantilla principal"
