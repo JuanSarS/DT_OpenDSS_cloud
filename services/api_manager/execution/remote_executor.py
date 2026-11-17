@@ -143,9 +143,8 @@ class RemoteSimulationExecutor:
             503,
             504,
         }:
-            self._raise_prepare_error(
-    response
-)
+        
+            response.raise_for_status()
 
         try:
             payload = response.json()

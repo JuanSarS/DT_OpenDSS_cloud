@@ -256,15 +256,96 @@ class WorkerPoolSimulationExecutor:
 
     async def session_info(self, session_id: str) -> ExecutorSessionInfo:
         binding = self._binding(session_id)
-        info = await self._clients[binding.endpoint].session_info(session_id)
-        return ExecutorSessionInfo(
-            session_id=info.session_id,
-            topology=info.topology,
-            model_summary=info.model_summary,
-            task_count=info.task_count,
-            runtime_identity=binding.endpoint,
-            load_multiplier=info.load_multiplier,
-        )
+        current_endpoint = binding.endpoint
+
+        try:
+            info = await self._clients[current_endpoint].session_info(session_id)
+
+            return ExecutorSessionInfo(
+                session_id=info.session_id,
+                topology=info.topology,
+                model_summary=info.model_summary,
+                task_count=info.task_count,
+                runtime_identity=current_endpoint,
+                load_multiplier=info.load_multiplier,
+            )
+
+        except Exception as exc:
+            if (
+                not settings.worker_retry_enabled
+                or not self._recoverable(exc)
+            ):
+                raise
+
+            last_error: Exception = exc
+            failed_endpoints: set[str] = {current_endpoint}
+
+            await self._mark_unhealthy(current_endpoint)
+
+            record_security_event(
+                SecurityEvent.WORKER_LOST.value,
+                detail=current_endpoint,
+            )
+
+            await asyncio.sleep(
+                settings.worker_retry_backoff_seconds
+            )
+
+            for _ in range(settings.worker_max_retries):
+                await self._sync_workers(force=True)
+
+                endpoint: str | None = None
+
+                try:
+                    endpoint = await self._choose_worker(
+                        failed_endpoints
+                    )
+
+                    info = await self._clients[
+                        endpoint
+                    ].prepare_session(
+                        session_id=session_id,
+                        topology=binding.topology,
+                        load_multiplier=binding.load_multiplier,
+                    )
+
+                    async with self._lock:
+                        self._bindings[
+                            session_id
+                        ] = WorkerBinding(
+                            endpoint=endpoint,
+                            topology=binding.topology,
+                            load_multiplier=binding.load_multiplier,
+                        )
+
+                    return ExecutorSessionInfo(
+                        session_id=info.session_id,
+                        topology=info.topology,
+                        model_summary=info.model_summary,
+                        task_count=info.task_count,
+                        runtime_identity=endpoint,
+                        load_multiplier=info.load_multiplier,
+                    )
+
+                except Exception as recovery_error:
+                    last_error = recovery_error
+
+                    if not self._recoverable(
+                        recovery_error
+                    ):
+                        raise
+
+                    if endpoint is not None:
+                        failed_endpoints.add(endpoint)
+                        await self._mark_unhealthy(
+                            endpoint
+                        )
+
+                    await asyncio.sleep(
+                        settings.worker_retry_backoff_seconds
+                    )
+
+            raise last_error
 
     async def close_session(self, session_id: str) -> None:
         binding = self._binding(session_id)
