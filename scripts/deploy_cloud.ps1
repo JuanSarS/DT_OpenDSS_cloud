@@ -347,7 +347,7 @@ $Admission = "true"
 $RateLimit = "true"
 $RateRequests = 120
 $WorkerDelay = 0
-
+$WorkerStopTimeout = 30
 if ($PerformanceMode) {
     $Admission = "false"
     $RateLimit = "false"
@@ -358,6 +358,7 @@ if ($PerformanceMode) {
 
 if ($ResilienceMode) {
     $WorkerDelay = 35
+    $WorkerStopTimeout = 5
 }
 
 Write-Host "[10] Validando plantilla principal"
@@ -393,6 +394,7 @@ Invoke-Aws cloudformation deploy `
         "RateLimitEnabled=$RateLimit" `
         "RateLimitRequests=$RateRequests" `
         "WorkerTestProgressDelayMs=$WorkerDelay" `
+        "WorkerStopTimeout=$WorkerStopTimeout" `
     --tags `
         "Project=$ProjectName" `
         "GitSha=$GitSha" `

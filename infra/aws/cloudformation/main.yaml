@@ -77,6 +77,11 @@ Parameters:
   WorkerTestProgressDelayMs:
     Type: Number
     Default: 0
+  WorkerStopTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 2
+    MaxValue: 120    
   LogRetentionDays:
     Type: Number
     Default: 7
@@ -460,6 +465,7 @@ Resources:
         - Name: simulation-worker
           Image: !Ref WorkerImageUri
           Essential: true
+          StopTimeout: !Ref WorkerStopTimeout
           PortMappings:
             - ContainerPort: 8100
               Protocol: tcp

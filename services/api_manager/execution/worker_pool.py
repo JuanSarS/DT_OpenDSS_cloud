@@ -8,7 +8,7 @@ import httpx
 from packages.contracts.execution import ExecutorSessionInfo, ProgressHandler
 from packages.contracts.jobs import JobStatus, SimulationJob
 from packages.contracts.results import SimulationResult
-from services.api_manager.execution.remote_executor import RemoteSimulationExecutor
+from services.api_manager.execution.remote_executor import RemoteSimulationExecutor, RemoteWorkerError
 from services.api_manager.execution.worker_discovery import (
     StaticWorkerDiscovery,
     WorkerDiscovery,
@@ -169,6 +169,13 @@ class WorkerPoolSimulationExecutor:
                 httpx.RemoteProtocolError,
                 httpx.TimeoutException,
             ),
+        ):
+         
+            return True
+        
+        if (
+            isinstance(exc, RemoteWorkerError)
+            and "Worker stream ended without SimulationResult" in str(exc)
         ):
             return True
         return isinstance(exc, httpx.HTTPStatusError) and (
