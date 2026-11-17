@@ -13,3 +13,6 @@ aws cloudformation describe-stacks `
     --profile opendss-deployer `
     --query "services[].{Service:serviceName,Desired:desiredCount,Running:runningCount,Pending:pendingCount}" `
     --output table
+
+$AwsCliNew = "$env:LOCALAPPDATA\Programs\Amazon\AWSCLIV2"                        
+$env:Path = "$AwsCliNew;$env:Path"            
