@@ -3,6 +3,8 @@ param(
     [string]$Profile = "opendss-deployer",
     [string]$ProjectName = "opendss-thesis"
 )
+$AwsCliNew = "$env:LOCALAPPDATA\Programs\Amazon\AWSCLIV2"                        
+$env:Path = "$AwsCliNew;$env:Path"            
 
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -37,7 +39,11 @@ Write-Host "Region:  $Region"
 Write-Host ""
 
 $identity = Invoke-AwsCli sts get-caller-identity --output json
-if ($LASTEXITCODE -ne 0) { throw "No hay autenticacion AWS valida." }
+if ($LASTEXITCODE -ne 0) { 
+    Write-Host "No hay autenticacion AWS valida." 
+    aws login --profile opendss-deployer
+    }
+    
 $identity | Set-Content -Encoding utf8 (Join-Path $EvidenceDir "aws_identity.json")
 
 if (Test-StackExists $MainStack) {

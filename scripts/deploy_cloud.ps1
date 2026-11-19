@@ -14,6 +14,8 @@ param(
     [switch]$SkipSmoke
 )
 
+$AwsCliNew = "$env:LOCALAPPDATA\Programs\Amazon\AWSCLIV2"                        
+$env:Path = "$AwsCliNew;$env:Path"            
 $ErrorActionPreference = "Stop"
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -113,6 +115,10 @@ foreach ($command in @("aws", "docker", "git")) {
 Write-Host "[1] Validando identidad AWS"
 
 $identity = Invoke-Aws sts get-caller-identity --output json
+if ($LASTEXITCODE -ne 0) { 
+    Write-Host "No hay autenticacion AWS valida." 
+    aws login --profile opendss-deployer
+    }
 $identity | Set-Content -Encoding utf8 (Join-Path $EvidenceDir "aws_identity.json")
 Write-Host $identity
 
