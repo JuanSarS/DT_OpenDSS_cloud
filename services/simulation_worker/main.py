@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from packages.contracts.errors import (
+    InteractiveConflict,
+    InteractiveContextLost,
     SimulationError,
     SimulationErrorCode,
+    SwitchNotFoundError,
 )
+from packages.contracts.interactive import WorkerInteractiveCommand, WorkerInteractiveReply
 from packages.contracts.jobs import JobStatus
 from packages.contracts.worker_api import (
     WorkerExecuteRequest,
@@ -120,6 +125,23 @@ async def close_session(
     await executor.close_session(
         session_id
     )
+
+
+@app.post("/internal/sessions/{session_id}/interactive", response_model=WorkerInteractiveReply)
+async def interactive(
+    session_id: str, command: WorkerInteractiveCommand, _: None = Depends(require_worker_token),
+) -> WorkerInteractiveReply:
+    try:
+        return await executor.interactive(session_id, command)
+    except InteractiveContextLost as exc:
+        raise HTTPException(404, detail={"code": "context_lost", "message": str(exc)}) from exc
+    except SwitchNotFoundError as exc:
+        raise HTTPException(404, detail={"code": "switch_not_found", "message": str(exc)}) from exc
+    except InteractiveConflict as exc:
+        raise HTTPException(409, detail={"code": "context_conflict", "message": str(exc)}) from exc
+    except Exception as exc:
+        logging.getLogger(__name__).exception("interactive_execution_failed session_id=%s", session_id)
+        raise HTTPException(422, detail={"code": "execution_failed"}) from exc
 
 
 @app.get(

@@ -3,13 +3,21 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from uuid import UUID
+from packages.common.custom_model_paths import CustomModelError
+from packages.contracts.errors import InteractiveConflict, InteractiveContextLost, SwitchNotFoundError
+from packages.contracts.interactive import (
+    WorkerInitialize, WorkerInteractiveCommand, WorkerInteractiveReply, WorkerProbe, WorkerStep,
+    WorkerStop, WorkerSwitch, WorkerSwitches,
+)
 from packages.contracts.models import ModelSummary
 from packages.contracts.jobs import JobStatus, SimulationJob
 from packages.contracts.progress import SimulationProgress
 from packages.contracts.results import SimulationResult
-from packages.simulation_core.engine import OpenDSSContextEngine
+from packages.simulation_core.engine import OpenDSSContextEngine, QSTSSequence
+from packages.simulation_core.custom_dss import custom_model_commands
 from packages.contracts.execution  import (
     ExecutorSessionInfo,
     ProgressHandler,
@@ -24,6 +32,14 @@ class LocalJobCancelled(Exception):
 
 
 @dataclass
+class WorkerRun:
+    run_id: UUID
+    sequence: QSTSSequence
+    catalog: dict[str, str]
+    active: bool = True
+
+
+@dataclass
 class LocalExecutionSession:
     session_id: str
     topology: str
@@ -31,6 +47,10 @@ class LocalExecutionSession:
     engine: OpenDSSContextEngine
     model_summary: ModelSummary
     task_count: int = 0
+    model_commands: list[str] | None = None
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    interactive_run: WorkerRun | None = None
+    initial_load_multiplier: float = 1.0
 
 
 class LocalSimulationExecutor:
@@ -75,31 +95,42 @@ class LocalSimulationExecutor:
         topology: str,
         load_multiplier: float,
     ) -> ExecutorSessionInfo:
-        topology_path = resolve_worker_topology(topology)
+        topology_path, workspace = resolve_worker_topology(topology)
+        model_commands = None
+        if workspace is not None:
+            model_commands = await asyncio.to_thread(custom_model_commands, workspace, topology_path)
         engine = None
         try:
-            
-
             engine = await asyncio.to_thread(
                 OpenDSSContextEngine,
                 topology_path,
                 load_multiplier,
+                model_commands=model_commands,
             )
 
             model_summary = await asyncio.to_thread(
                 engine.model_summary,
                 topology,
             )
+            if model_commands is not None and not model_summary.num_buses:
+                raise CustomModelError("El master no inicializa un circuito con buses.")
         except Exception as exc:
-             if engine is not None:
+            if engine is not None:
                 try:
                     await asyncio.to_thread(
                         engine.close
                     )
                 except Exception:
                     pass
-
-             raise ValueError(
+            if isinstance(exc, CustomModelError):
+                raise
+            if workspace is not None:
+                error_code = f" (código {exc.args[0]})" if exc.args and type(exc.args[0]) is int else ""
+                master = topology_path.relative_to(workspace).as_posix()
+                raise CustomModelError(
+                    f"OpenDSS no pudo cargar {master}{error_code}. Revise que el master inicialice un circuito válido."
+                ) from exc
+            raise ValueError(
                 "No se pudo cargar el modelo "
                 f"'{topology}' "
                 f"({topology_path.name}): "
@@ -112,6 +143,8 @@ class LocalSimulationExecutor:
             topology_path=topology_path,
             engine=engine,
             model_summary=model_summary,
+            model_commands=model_commands,
+            initial_load_multiplier=load_multiplier,
         )
 
         async with self._registry_lock:
@@ -130,10 +163,18 @@ class LocalSimulationExecutor:
         job: SimulationJob,
         progress_handler: ProgressHandler | None = None,
     ) -> SimulationResult:
-        runtime = self._require_session(
-            job.session_id
-        )
+        runtime = self._require_session(job.session_id)
+        async with runtime.lock:
+            if self._sessions.get(job.session_id) is not runtime:
+                raise KeyError("La sesión de ejecución fue cerrada.")
+            if runtime.interactive_run and runtime.interactive_run.active:
+                raise InteractiveConflict("El contexto está reservado por un QSTS interactivo.")
+            runtime.interactive_run = None
+            return await self._submit_job(runtime, job, progress_handler)
 
+    async def _submit_job(
+        self, runtime: LocalExecutionSession, job: SimulationJob, progress_handler: ProgressHandler | None,
+    ) -> SimulationResult:
         if runtime.topology.lower() != job.topology.lower():
             raise ValueError(
                 "Job topology does not match prepared session"
@@ -392,7 +433,10 @@ class LocalSimulationExecutor:
             session_id
         )
 
-        return self._session_info(runtime)
+        async with runtime.lock:
+            if self._sessions.get(session_id) is not runtime:
+                raise KeyError("La sesión de ejecución fue cerrada.")
+            return self._session_info(runtime)
 
     async def close_session(
         self,
@@ -405,9 +449,78 @@ class LocalSimulationExecutor:
             )
 
         if runtime is not None:
-            await asyncio.to_thread(
-                runtime.engine.close
-            )
+            async with runtime.lock:
+                await asyncio.to_thread(runtime.engine.close)
+
+    async def interactive(
+        self, session_id: str, command: WorkerInteractiveCommand,
+    ) -> WorkerInteractiveReply:
+        runtime = self._sessions.get(session_id)
+        if runtime is None:
+            raise InteractiveContextLost("El worker ya no tiene el contexto de la simulación.")
+        async with runtime.lock:
+            if self._sessions.get(session_id) is not runtime:
+                raise InteractiveContextLost("El contexto de la simulación se cerró.")
+            operation = asyncio.create_task(asyncio.to_thread(self._apply_interactive, runtime, command))
+            try:
+                return await asyncio.shield(operation)
+            except asyncio.CancelledError:
+                await operation
+                raise
+
+    def _apply_interactive(
+        self, runtime: LocalExecutionSession, command: WorkerInteractiveCommand,
+    ) -> WorkerInteractiveReply:
+        run = runtime.interactive_run
+        if isinstance(command, WorkerInitialize):
+            if run and run.active and not command.reset:
+                raise InteractiveConflict("El worker ya tiene un QSTS activo.")
+            engine = runtime.engine
+            if command.reset:
+                engine = OpenDSSContextEngine(
+                    runtime.topology_path, runtime.initial_load_multiplier, model_commands=runtime.model_commands,
+                )
+            try:
+                sequence = engine.begin_qsts(command.config)
+                branches, catalog = engine.branch_catalog()
+                switches = [engine.switch_state(name) for name in catalog.values()]
+            except Exception:
+                if command.reset:
+                    engine.close()
+                raise
+            if command.reset:
+                old = runtime.engine
+                runtime.engine = engine
+                old.close()
+                runtime.task_count = 0
+            runtime.interactive_run = WorkerRun(command.run_id, sequence, catalog)
+            return WorkerInteractiveReply(branches=branches, switches=switches)
+
+        if run is None or command.run_id != run.run_id:
+            raise InteractiveContextLost("El worker no conserva la ejecución interactiva solicitada.")
+        if isinstance(command, WorkerProbe):
+            return WorkerInteractiveReply()
+        engine = runtime.engine
+        if isinstance(command, WorkerSwitches):
+            return WorkerInteractiveReply(switches=[engine.switch_state(name) for name in run.catalog.values()])
+        if isinstance(command, WorkerStop):
+            run.active = False
+            return WorkerInteractiveReply()
+        if not run.active or command.expected_step != run.sequence.completed:
+            raise InteractiveConflict("El worker tiene un paso o estado distinto del solicitado.")
+        if isinstance(command, WorkerSwitch):
+            element = run.catalog.get(command.element.casefold())
+            if element is None:
+                raise SwitchNotFoundError("El elemento no es un interruptor controlable.")
+            return WorkerInteractiveReply(switch=engine.operate_switch(element, command.action))
+
+        assert isinstance(command, WorkerStep)
+        result = engine.advance_interactive(run.sequence)
+        if run.sequence.completed == run.sequence.config.total_steps:
+            run.active = False
+        return WorkerInteractiveReply(
+            result=result, switches=[engine.switch_state(name) for name in run.catalog.values()],
+        )
 
     def _require_session(
         self,
@@ -477,6 +590,7 @@ class LocalSimulationExecutor:
             OpenDSSContextEngine,
             runtime.topology_path,
             load_multiplier,
+            model_commands=runtime.model_commands,
         )
 
         runtime.model_summary = (

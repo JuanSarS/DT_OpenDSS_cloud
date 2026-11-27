@@ -4,8 +4,12 @@ import json
 
 import httpx
 
+from packages.common.custom_model_paths import CUSTOM_TOPOLOGY, STAGED_CUSTOM_TOPOLOGY, CustomModelError
 from packages.common.secrets import read_secret
-from packages.contracts.errors import SimulationError
+from packages.contracts.errors import (
+    InteractiveContextLost, InteractiveExecutionError, SimulationError, SwitchNotFoundError,
+)
+from packages.contracts.interactive import WorkerInteractiveCommand, WorkerInteractiveReply
 from packages.contracts.execution import ExecutorSessionInfo, ProgressHandler
 from packages.contracts.jobs import JobStatus, SimulationJob
 from packages.contracts.progress import SimulationProgress
@@ -51,6 +55,19 @@ class RemoteSimulationExecutor:
                 "/internal/sessions",
                 json=request.model_dump(mode="json"),
             )
+            if (
+                response.status_code in (404, 422)
+                and topology.partition(":")[0] in {CUSTOM_TOPOLOGY, STAGED_CUSTOM_TOPOLOGY}
+            ):
+                try:
+                    payload = response.json()
+                except ValueError:
+                    payload = None
+                detail = payload.get("detail") if isinstance(payload, dict) else None
+                if isinstance(detail, str):
+                    if response.status_code == 404:
+                        raise FileNotFoundError(detail)
+                    raise CustomModelError(detail)
             self._raise_prepare_error(
                 response
             )
@@ -130,6 +147,29 @@ class RemoteSimulationExecutor:
             self._raise_prepare_error(
                 response
             )
+
+    async def interactive(
+        self, session_id: str, command: WorkerInteractiveCommand,
+    ) -> WorkerInteractiveReply:
+        try:
+            async with self._client() as client:
+                response = await client.post(
+                    f"/internal/sessions/{session_id}/interactive",
+                    json=command.model_dump(mode="json"),
+                    timeout=min(45.0, self._timeout),
+                )
+            payload = response.json()
+            if response.is_success:
+                return WorkerInteractiveReply.model_validate(payload)
+        except (httpx.HTTPError, ValueError) as exc:
+            raise InteractiveContextLost("El worker no confirmó el comando interactivo.") from exc
+        detail = payload.get("detail") if isinstance(payload, dict) else None
+        code = detail.get("code") if isinstance(detail, dict) else None
+        if code == "switch_not_found":
+            raise SwitchNotFoundError("El elemento no es un interruptor controlable.")
+        if code == "execution_failed":
+            raise InteractiveExecutionError("OpenDSS no pudo completar la operación.")
+        raise InteractiveContextLost("El worker no confirmó el estado del contexto interactivo.")
 
     def _raise_prepare_error(
         self,

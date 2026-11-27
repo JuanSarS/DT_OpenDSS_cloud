@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 PROJECT_ROOT = (
@@ -21,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.api_manager.api.routes.health import (
     router as health_router,
 )
+from services.api_manager.api.routes import interactive as interactive_routes
 from services.api_manager.api.routes.metrics import (
     router as metrics_router,
 )
@@ -55,10 +57,18 @@ from services.api_manager.security.proxy import external_client_ip
 
 configure_logging()
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    yield
+    await interactive_routes.simulation_service.interactive.shutdown()
+
+
 app = FastAPI(
     title="OpenDSS Cloud API",
     version="0.1.0",
     description="Gemelo digital híbrido con sesiones OpenDSS aisladas y observadores WebSocket.",
+    lifespan=lifespan,
 )
 
 
@@ -109,6 +119,7 @@ app.include_router(security_router)
 app.include_router(metrics_router)
 app.include_router(models_router)
 app.include_router(simulations_router)
+app.include_router(interactive_routes.router)
 app.include_router(websocket_router)
 app.mount(
     "/static",

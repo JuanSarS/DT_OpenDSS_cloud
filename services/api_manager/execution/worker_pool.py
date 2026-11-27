@@ -5,6 +5,9 @@ from dataclasses import dataclass
 
 import httpx
 
+from packages.contracts.errors import InteractiveContextLost, WorkerUnavailableError
+from packages.contracts.interactive import WorkerInteractiveCommand, WorkerInteractiveReply
+
 from packages.contracts.execution import ExecutorSessionInfo, ProgressHandler
 from packages.contracts.jobs import JobStatus, SimulationJob
 from packages.contracts.results import SimulationResult
@@ -58,7 +61,7 @@ class WorkerPoolSimulationExecutor:
             if endpoint
         ]
         if not discovered:
-            raise RuntimeError("Worker discovery no devolvió endpoints")
+            raise WorkerUnavailableError("Worker discovery no devolvió endpoints")
 
         async with self._lock:
             for endpoint in discovered:
@@ -85,7 +88,7 @@ class WorkerPoolSimulationExecutor:
                 and endpoint not in self._unhealthy
             ]
             if not candidates:
-                raise RuntimeError("No hay workers saludables disponibles")
+                raise WorkerUnavailableError("No hay workers saludables disponibles")
 
             counts = {endpoint: 0 for endpoint in candidates}
             for binding in self._bindings.values():
@@ -151,7 +154,7 @@ class WorkerPoolSimulationExecutor:
 
         if last_error is not None:
             raise last_error
-        raise RuntimeError("No fue posible preparar la sesión en ningún worker")
+        raise WorkerUnavailableError("No fue posible preparar la sesión en ningún worker")
 
     def _binding(self, session_id: str) -> WorkerBinding:
         try:
@@ -256,6 +259,17 @@ class WorkerPoolSimulationExecutor:
     async def status(self, job_id: str) -> JobStatus:
         endpoint = self._job_bindings[job_id]
         return await self._clients[endpoint].status(job_id)
+
+    async def interactive(
+        self, session_id: str, command: WorkerInteractiveCommand,
+    ) -> WorkerInteractiveReply:
+        try:
+            executor = self._clients[self._binding(session_id).endpoint]
+        except KeyError as exc:
+            raise InteractiveContextLost("Se perdió la afinidad con el worker de la simulación.") from exc
+        # A different worker cannot resume this context. Only an explicit
+        # restart from the API may prepare a replacement.
+        return await executor.interactive(session_id, command)
 
     async def cancel(self, job_id: str) -> JobStatus:
         endpoint = self._job_bindings[job_id]

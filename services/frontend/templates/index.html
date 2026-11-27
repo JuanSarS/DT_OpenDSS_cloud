@@ -118,11 +118,17 @@
     <section class="section session-browser" aria-labelledby="sessions-title">
       <div class="section-heading simple">
         <div><span class="section-kicker">00</span><h3 id="sessions-title">Simulaciones disponibles</h3></div>
-        <button id="refreshSessionsBtn" class="button button-secondary" type="button">Actualizar lista</button>
+        <button id="refreshSessionsBtn" class="button button-secondary" type="button">Actualizar simulaciones e invitaciones</button>
       </div>
+      <section class="session-invitations" aria-labelledby="invitations-title">
+        <h4 id="invitations-title">Invitaciones recibidas</h4>
+        <p id="invitationsMessage" class="empty-state" role="status"></p>
+        <div id="invitationsList" class="sessions-list" aria-live="polite"></div>
+      </section>
       <div class="session-browser-controls">
         <input id="sessionIdInput" class="input" type="text" placeholder="Pegue aquí un session_id para unirse" aria-label="Identificador de sesión">
         <button id="joinSessionBtn" class="button button-secondary" type="button">Unirse por ID</button>
+        <button id="requestAccessBtn" class="button button-secondary" type="button" hidden>Solicitar acceso a esta simulación</button>
       </div>
       <p id="sessionsMessage" class="empty-state">Cargando simulaciones...</p>
       <div id="sessionsList" class="sessions-list" aria-live="polite"></div>
@@ -140,26 +146,34 @@
           <select
             id="inviteUserSelect"
             class="select"
+            aria-label="Usuario para invitar"
           ></select>
+          <select id="inviteRoleSelect" class="select" aria-label="Rol de la invitación">
+            <option value="viewer">Espectador</option>
+            <option value="operator">Operador</option>
+          </select>
 
           <button
             id="inviteUserBtn"
             class="button button-secondary"
             type="button"
+            disabled
           >
             Invitar
           </button>
+          <button id="refreshSharingBtn" class="button button-secondary" type="button">Actualizar permisos</button>
         </div>
+        <p id="sharingMessage" class="empty-state" role="status"></p>
 
         <div class="sharing-grid">
 
           <div>
-            <strong>Espectadores</strong>
+            <strong>Participantes autorizados</strong>
             <div id="viewersList"></div>
           </div>
 
           <div>
-            <strong>Solicitudes</strong>
+            <strong>Solicitudes de acceso</strong>
             <div id="accessRequestsList"></div>
           </div>
 
@@ -205,7 +219,8 @@
             <label for="simulationType">Tipo de simulación</label>
             <select id="simulationType" class="select">
               <option value="snapshot">Snapshot</option>
-              <option value="qsts">QSTS</option>
+              <option value="qsts">QSTS batch</option>
+              <option value="qsts_interactive">QSTS interactivo</option>
               <option value="daily" disabled>Daily · Próximamente</option>
               <option value="yearly" disabled>Yearly · Próximamente</option>
             </select>
@@ -215,11 +230,11 @@
             <input id="loadMultiplier" class="input" type="number" value="1.00" min="0" step="0.01" />
           </div>
           <div class="field qsts-option" hidden>
-            <label for="durationHours">Duración (horas)</label>
+            <label for="durationHours">Duración simulada (horas)</label>
             <input id="durationHours" class="input" type="number" value="24" min="0.01" step="0.25" />
           </div>
           <div class="field qsts-option" hidden>
-            <label for="stepMinutes">Paso (minutos)</label>
+            <label for="stepMinutes">Paso simulado (minutos)</label>
             <input id="stepMinutes" class="input" type="number" value="5" min="0.01" step="5" />
           </div>
           <div class="field qsts-option" hidden>
@@ -249,6 +264,19 @@
             <small id="valuesCount" class="field-hint">Valores esperados: — · Valores ingresados: 0</small>
           </div>
         </div>
+        <div id="interactiveSetup" class="config-grid interactive-setup" hidden>
+          <div class="field">
+            <label for="initialQstsMode">Modo inicial</label>
+            <select id="initialQstsMode" class="select">
+              <option value="manual">Manual</option>
+              <option value="automatic">Automático</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="initialQstsInterval">Intervalo real (segundos)</label>
+            <input id="initialQstsInterval" class="input" type="number" min="0.1" max="3600" step="0.1" value="5">
+          </div>
+        </div>
         <div class="button-row">
           <button id="createBtn" class="button button-secondary" type="button">Crear simulación</button>
           <button id="solveBtn" class="button button-primary" type="button" disabled>Ejecutar simulación</button>
@@ -265,6 +293,7 @@
           <span class="muted">session_id</span><code id="sessionId">—</code>
           <button id="copySessionBtn" class="link-button" type="button" disabled>Copiar</button>
         </div>
+        <p id="sessionTopology" class="microcopy" hidden></p>
         <div class="status-list" id="statusList">
           <div class="status-line" data-state="session"><span class="state-icon"></span><span>Sesión creada</span><small id="timeSession">—</small></div>
           <div class="status-line" data-state="ws"><span class="state-icon"></span><span>WebSocket conectado</span><small id="timeWs">—</small></div>
@@ -278,6 +307,44 @@
         </div>
         <div class="future-progress"><span id="progressStep">Paso — / —</span><span id="progressHour">Hora simulada —</span><span id="progressLoad">LoadMult —</span></div>
         <div id="progressDetails" class="progress-details">Potencia — · Vmin — · Vmax — · solve —</div>
+      </div>
+    </section>
+
+    <section id="interactivePanel" class="section section-two-columns" aria-label="QSTS interactivo" hidden>
+      <div class="column">
+        <div class="section-heading simple">
+          <h3>QSTS interactivo</h3>
+          <span id="interactivePhase" class="state-text" role="status"></span>
+        </div>
+        <p id="interactiveClock" class="microcopy"></p>
+        <p id="interactiveNotice" class="interactive-notice" role="status" hidden></p>
+        <div class="button-row interactive-buttons">
+          <button id="interactiveRun" class="button button-primary" type="button">Automático</button>
+          <button id="interactivePause" class="button button-secondary" type="button">Pausar</button>
+          <button id="interactiveResume" class="button button-secondary" type="button">Reanudar</button>
+          <button id="interactiveStep" class="button button-secondary" type="button">Siguiente paso</button>
+          <button id="interactiveStop" class="button button-secondary" type="button">Detener</button>
+          <button id="interactiveRestart" class="button button-secondary" type="button">Reiniciar</button>
+        </div>
+        <div class="config-grid interactive-setup">
+          <div class="field">
+            <label for="interactiveMode">Modo de avance</label>
+            <select id="interactiveMode" class="select">
+              <option value="manual">Manual</option>
+              <option value="automatic">Automático</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="interactiveInterval">Intervalo real (segundos)</label>
+            <input id="interactiveInterval" class="input" type="number" min="0.1" max="3600" step="0.1">
+          </div>
+          <button id="interactiveApplyInterval" class="button button-secondary" type="button">Aplicar intervalo</button>
+        </div>
+      </div>
+      <div class="column">
+        <div class="section-heading simple"><h3>Interruptores</h3></div>
+        <div id="switchList" class="switch-list"></div>
+        <button id="showNetworkBtn" class="link-button" type="button">Ver diagrama de la red</button>
       </div>
     </section>
 
@@ -301,7 +368,8 @@
         <button class="tab" data-tab="qsts" type="button">QSTS</button>
         <button class="tab" data-tab="metrics" type="button">Métricas</button>
         <button class="tab" data-tab="events" type="button">Eventos</button>
-        <button class="tab" data-tab="diagram" type="button">Diagrama <span class="coming-soon">Próximamente</span></button>
+        <button class="tab" data-tab="diagram" type="button">Diagrama</button>
+        <button class="tab" data-tab="operations" type="button">Operaciones</button>
         <button class="tab" data-tab="summary" type="button">Resumen</button>
       </div>
 
@@ -327,6 +395,10 @@
         </div>
       </div>
       <div class="tab-panel" data-panel="qsts">
+        <figure id="interactiveChart" class="interactive-figure" hidden>
+          <figcaption>Potencia activa (kW) y tensión mínima y máxima (p.u.) por paso simulado</figcaption>
+          <canvas id="qstsTrend" width="960" height="270" aria-label="Series de potencia activa y tensión por paso"></canvas>
+        </figure>
         <div class="table-toolbar">
           <input id="qstsSearch" class="input table-search" type="search" placeholder="Buscar step, hora o LoadMult…" />
         </div>
@@ -344,19 +416,19 @@
       <div class="tab-panel" data-panel="events"><ol id="eventLog" class="event-log"><li>Interfaz inicializada.</li></ol></div>
 
       <div class="tab-panel" data-panel="diagram">
-        <div class="diagram-placeholder">
-          <div class="diagram-copy">
-            <strong>Visualización automática del circuito a partir del modelo DSS</strong>
-            <p>Esta pestaña queda reservada para una futura representación de buses, líneas, transformadores y cargas. Será de solo lectura.</p>
-          </div>
-          <svg viewBox="0 0 720 220" role="img" aria-label="Vista conceptual futura del circuito">
-            <line x1="70" y1="110" x2="210" y2="110"/><line x1="210" y1="110" x2="350" y2="110"/>
-            <line x1="350" y1="110" x2="500" y2="60"/><line x1="350" y1="110" x2="500" y2="165"/>
-            <line x1="500" y1="60" x2="640" y2="60"/><line x1="500" y1="165" x2="640" y2="165"/>
-            <circle cx="70" cy="110" r="7"/><circle cx="210" cy="110" r="7"/><circle cx="350" cy="110" r="7"/>
-            <circle cx="500" cy="60" r="7"/><circle cx="500" cy="165" r="7"/><circle cx="640" cy="60" r="7"/><circle cx="640" cy="165" r="7"/>
-            <text x="42" y="92">Source</text><text x="188" y="92">Bus 1</text><text x="325" y="92">Bus 2</text><text x="477" y="42">Bus 3</text><text x="477" y="195">Bus 4</text>
-          </svg>
+        <p id="networkEmpty" class="empty-state">Inicie un QSTS interactivo para visualizar el circuito.</p>
+        <figure id="networkFigure" class="interactive-figure" hidden>
+          <figcaption id="networkLegend">Líneas y transformadores · Verde cerrado · Rojo abierto · Ámbar parcial</figcaption>
+          <canvas id="networkCanvas" width="960" height="440" aria-label="Diagrama de conexiones del circuito"></canvas>
+          <button id="networkResetZoom" class="link-button" type="button" hidden>Ver red completa</button>
+        </figure>
+      </div>
+      <div class="tab-panel" data-panel="operations">
+        <div class="table-wrap">
+          <table aria-label="Historial de operaciones de interruptores">
+            <thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Interruptor</th><th>Acción</th><th>Paso confirmado</th><th>Estado efectivo</th></tr></thead>
+            <tbody id="switchHistory"><tr><td colspan="6">Sin operaciones.</td></tr></tbody>
+          </table>
         </div>
       </div>
 
@@ -367,6 +439,7 @@
     </section>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/js/interactive.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

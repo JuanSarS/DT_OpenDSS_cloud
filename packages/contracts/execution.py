@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Protocol, runtime_checkable
 
 from packages.contracts.jobs import JobStatus, SimulationJob
+from packages.contracts.interactive import WorkerInteractiveCommand, WorkerInteractiveReply
 from packages.contracts.models import ModelSummary
 from packages.contracts.progress import SimulationProgress
 from packages.contracts.results import SimulationResult
@@ -82,4 +83,9 @@ class SimulationExecutor(Protocol):
         self,
         session_id: str,
     ) -> None:
+        ...
+
+    async def interactive(
+        self, session_id: str, command: WorkerInteractiveCommand,
+    ) -> WorkerInteractiveReply:
         ...

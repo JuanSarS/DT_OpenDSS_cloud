@@ -1,17 +1,21 @@
 import time
 
+import httpx
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
+from packages.common.custom_model_paths import CustomModelError
 from services.api_manager.auth.constants import (
     ACCESS_COOKIE_NAME,
 )
 from packages.contracts.errors import (
     AccessDeniedError,
+    InteractiveConflict,
     OverloadedError,
     QuotaExceededError,
     SimulationClosedError,
     SimulationNotFoundError,
     TopologyNotFoundError,
+    WorkerUnavailableError,
 )
 from packages.contracts.models import (
     CreateSimulationRequest,
@@ -29,6 +33,7 @@ from services.api_manager.auth.dependencies import (
     get_user_from_token,
 )
 from services.api_manager.auth.users import load_users
+from services.api_manager.execution.remote_executor import RemoteWorkerError
 from services.api_manager.orchestration.container import simulation_service
 from services.api_manager.platform.metrics import metrics
 from services.api_manager.security.events import (
@@ -53,8 +58,16 @@ async def create_simulation(
     current_user: CurrentUser,
 ) -> CreateSimulationResponse:
     try:
-        return await simulation_service.create(request, owner_id=current_user.username)
-    except (TopologyNotFoundError, RuntimeError) as exc:
+        return await simulation_service.create(
+            request, owner_id=current_user.username, is_admin=current_user.role == "admin",
+        )
+    except AccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (httpx.HTTPError, RemoteWorkerError, WorkerUnavailableError, OSError) as exc:
+        raise HTTPException(status_code=503, detail="El worker no pudo preparar la simulación.") from exc
+    except (CustomModelError, TopologyNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -67,12 +80,13 @@ async def list_simulations(current_user: CurrentUser) -> list[SimulationSummary]
 
 
 @router.get("/{session_id}/viewers")
-async def list_viewers(session_id: str, current_user: CurrentUser) -> list[str]:
+async def list_viewers(session_id: str, current_user: CurrentUser, invited_only: bool = False) -> list[str]:
     try:
         return simulation_service.list_viewers(
             session_id,
             user_id=current_user.username,
             is_admin=current_user.role == "admin",
+            invited_only=invited_only,
         )
     except SimulationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -86,14 +100,17 @@ async def add_viewer(
     request: ViewerRequest,
     current_user: CurrentUser,
 ) -> list[str]:
-    if request.username not in load_users():
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    is_admin = current_user.role == "admin"
     try:
+        simulation_service.list_viewers(session_id, user_id=current_user.username, is_admin=is_admin)
+        viewer = load_users().get(request.username)
+        if viewer is None or viewer.disabled:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
         return simulation_service.add_viewer(
             session_id,
             request.username,
             user_id=current_user.username,
-            is_admin=current_user.role == "admin",
+            is_admin=is_admin,
         )
     except SimulationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -110,7 +127,7 @@ async def remove_viewer(
     current_user: CurrentUser,
 ) -> list[str]:
     try:
-        return simulation_service.remove_viewer(
+        return await simulation_service.remove_viewer(
             session_id,
             username,
             user_id=current_user.username,
@@ -171,6 +188,8 @@ async def access_requests(
             )
         )
 
+    except SimulationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AccessDeniedError as exc:
         raise HTTPException(
             status_code=403,
@@ -200,6 +219,8 @@ async def approve_access(
             )
         )
 
+    except SimulationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AccessDeniedError as exc:
         raise HTTPException(
             status_code=403,
@@ -223,15 +244,17 @@ async def reject_access(
     current_user: CurrentUser,
 ) -> None:
 
-    simulation_service.reject_access_request(
-        session_id,
-        username,
-        user_id=current_user.username,
-        is_admin=(
-            current_user.role
-            == "admin"
-        ),
-    )
+    try:
+        simulation_service.reject_access_request(
+            session_id,
+            username,
+            user_id=current_user.username,
+            is_admin=current_user.role == "admin",
+        )
+    except SimulationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 @router.get("/{session_id}", response_model=SimulationDetail)
 async def get_simulation(session_id: str, current_user: CurrentUser) -> SimulationDetail:
@@ -348,7 +371,7 @@ async def solve_simulation(
             detail="session ownership",
         )
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except SimulationClosedError as exc:
+    except (SimulationClosedError, InteractiveConflict) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (QuotaExceededError, OverloadedError) as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc

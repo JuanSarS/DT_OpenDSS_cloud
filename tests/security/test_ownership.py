@@ -21,6 +21,7 @@ def _service_with_session():
         {
             "owner_id": "user1",
             "viewer_ids": set(),
+            "operator_ids": set(),
         },
     )()
 

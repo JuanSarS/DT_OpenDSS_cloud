@@ -32,6 +32,26 @@ class OverloadedError(RuntimeError):
     """Raised when global job capacity is exhausted."""
 
 
+class WorkerUnavailableError(RuntimeError):
+    """Raised when the configured worker pool has no usable endpoint."""
+
+
+class InteractiveConflict(RuntimeError):
+    """The command conflicts with the current QSTS run or step."""
+
+
+class InteractiveContextLost(RuntimeError):
+    """The worker cannot confirm the pinned engine or the last command."""
+
+
+class InteractiveExecutionError(RuntimeError):
+    """OpenDSS could not complete an interactive command."""
+
+
+class SwitchNotFoundError(LookupError):
+    """The requested element is outside the controllable switch catalog."""
+
+
 class SimulationErrorCode(str, Enum):
     INVALID_REQUEST = "INVALID_REQUEST"
     TOPOLOGY_NOT_FOUND = "TOPOLOGY_NOT_FOUND"
